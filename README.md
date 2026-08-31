@@ -193,12 +193,21 @@ eager 模式代价，CUDA Graph 模式下可基本消除（对应 TPOT 34.15 →
 
 ### 4.4 查看 trace
 
+trace 文件体积大（83~121MB），不进 git 仓库，统一从 GitHub Release 下载：
+
+- Release 页面：<https://github.com/OuYangxin12/vllm-profiling/releases/tag/artifacts>
+- FP8 trace：<https://github.com/OuYangxin12/vllm-profiling/releases/download/artifacts/qwen3_fp8_dp0_pp0_tp0_dcp0_ep0_rank0.1788165308338834706.pt.trace.json.gz>
+- NVFP4 trace：<https://github.com/OuYangxin12/vllm-profiling/releases/download/artifacts/qwen3_fp4_dp0_pp0_tp0_dcp0_ep0_rank0.1788168168135033208.pt.trace.json.gz>
+- NVFP4 kernel 汇总：<https://github.com/OuYangxin12/vllm-profiling/releases/download/artifacts/qwen3_fp4_kernel_summary.txt>
+
 ```bash
 # 方式一：Chrome 浏览器打开 chrome://tracing，加载 *.pt.trace.json.gz
 # 方式二：Perfetto UI（https://ui.perfetto.dev）拖入文件
 # 方式三：命令行汇总
 python3 analyze_trace.py prof_traces/qwen3_fp8_*.pt.trace.json.gz
 ```
+
+后续新增 trace 上传：`gh release upload artifacts <新trace文件> --clobber`
 
 ### 4.5 NVFP4 profiling 结果
 
@@ -254,7 +263,7 @@ KV cache 需求估算（FP8 KV）：batch 4 × (8K+1K) ≈ 36K tokens，在 0.70
 | `bench_result_graph_nocompile.json` | FP8 graph+no-compile 基准结果 |
 | `bench_result_nvfp4.json` | NVFP4 干净基准结果（graph+compile） |
 | `prof_patch/sitecustomize.py` | torch profiler 自动打点补丁（PYTHONPATH 注入） |
-| `prof_traces/*.pt.trace.json.gz` | chrome trace（FP8 / NVFP4 的 prefill+decode kernel 级数据） |
+| `prof_traces/*.pt.trace.json.gz` | chrome trace（FP8 / NVFP4 的 prefill+decode kernel 级数据，不入库，见 4.4 节 Release 下载链接） |
 | `prof_traces/qwen3_fp4_kernel_summary.txt` | NVFP4 trace kernel 汇总 |
 | `analyze_trace.py` | trace 分析脚本（prefill/decode kernel 汇总） |
 | `download_model.sh` | ModelScope 模型下载脚本 |
