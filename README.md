@@ -81,8 +81,22 @@ docker run -d \
 | 每请求吞吐 | 32.7 tok/s |
 | batch 总耗时 | 31.35 s |
 
-eager 模式（`--enforce-eager`）下 TTFT ≈ 2156 ms、TPOT ≈ 34.15 ms（约慢 15%，主要是
-decode 阶段的 elementwise copy 开销，详见第 4.3 节）。
+eager 模式（`--enforce-eager`）下 TTFT ≈ 2156 ms、TPOT ≈ 34.15 ms；graph+no-compile 模式
+（`--compilation-config '{"mode": "NONE", "cudagraph_mode": "FULL_DECODE_ONLY"}'`）下
+TTFT ≈ 2313 ms、TPOT ≈ 34.25 ms。
+
+三种模式对比（8K in / 1K out / batch 4）：
+
+| 模式 | TTFT | TPOT | 说明 |
+|---|---|---|---|
+| graph + compile（默认） | 1515 ms | 29.15 ms | 正式报数，见 `bench_result.json` |
+| graph + no-compile | 2313 ms | 34.25 ms | 见 `bench_result_graph_nocompile.json` |
+| eager | ~2156 ms | ~34.15 ms | profiling 会话，无独立 bench 文件 |
+
+结论：性能收益主要来自 **torch.compile 算子融合**（TPOT -15%、TTFT -35%），
+CUDA Graph 单独启用（无 compile）对 decode 几乎无增益，与 trace 分析中
+decode 12% 时间在 elementwise copy 的结论互相印证——该开销在
+FULL_DECODE_ONLY 图内依然存在，需 compile 融合才能消除。
 
 ### 其他获取 TTFT/TPOT 的途径
 
