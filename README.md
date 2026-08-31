@@ -85,18 +85,22 @@ eager 模式（`--enforce-eager`）下 TTFT ≈ 2156 ms、TPOT ≈ 34.15 ms；gr
 （`--compilation-config '{"mode": "NONE", "cudagraph_mode": "FULL_DECODE_ONLY"}'`）下
 TTFT ≈ 2313 ms、TPOT ≈ 34.25 ms。
 
-三种模式对比（8K in / 1K out / batch 4）：
+四种模式对比（8K in / 1K out / batch 4，TTFT / TPOT）：
 
-| 模式 | TTFT | TPOT | 说明 |
+| 模式 | FP8 | NVFP4 | 说明 |
 |---|---|---|---|
-| graph + compile（默认） | 1515 ms | 29.15 ms | 正式报数，见 `bench_result.json` |
-| graph + no-compile | 2313 ms | 34.25 ms | 见 `bench_result_graph_nocompile.json` |
-| eager | ~2156 ms | ~34.15 ms | profiling 会话，无独立 bench 文件 |
+| graph + compile（默认） | 1515 / 29.15 ms | **1223 / 19.47 ms** | 正式报数 |
+| graph + no-compile | 2313 / 34.25 ms | 1196 / 26.76 ms | `mode=NONE` + `FULL_DECODE_ONLY` |
+| eager | ~2156 / ~34.15 ms | —（trace 见 4.5 节 decode 30.8ms/步） | profiling 会话 |
 
-结论：性能收益主要来自 **torch.compile 算子融合**（TPOT -15%、TTFT -35%），
-CUDA Graph 单独启用（无 compile）对 decode 几乎无增益，与 trace 分析中
-decode 12% 时间在 elementwise copy 的结论互相印证——该开销在
-FULL_DECODE_ONLY 图内依然存在，需 compile 融合才能消除。
+FP8 结果文件：`bench_result.json` / `bench_result_graph_nocompile.json`；
+NVFP4：`bench_result_nvfp4.json` / `bench_result_nvfp4_graph_nocompile.json`。
+
+结论：
+- **FP8**：性能收益几乎全部来自 torch.compile 融合（TPOT -15%、TTFT -35%），
+  CUDA Graph 单独启用对 decode 几乎无增益。
+- **NVFP4**：compile 依然显著（TPOT 26.76→19.47 ms，-27%）；graph 单独启用
+  相比 eager decode（~30.8ms/步）有 ~4ms 收益（消除 launch 开销）。
 
 ### NVFP4 对比结果（同参数：8K in / 1K out / batch 4，graph+compile）
 
@@ -238,6 +242,36 @@ trace：`prof_traces/qwen3_fp4_*.pt.trace.json.gz`，汇总：`prof_traces/qwen3
 FP4 带来的带宽收益使 eager decode 从 33.8 降到 30.8 ms/步；elementwise copy 占比
 依旧最高（16%），compile 融合后预计收益更大（对应干净跑分 TPOT 19.47 ms）。
 
+### 4.6 graph+no-compile 模式的 profiling（FP8 / NVFP4）
+
+配置：第 3 节 graph+no-compile 同款 `mode=NONE` + `FULL_DECODE_ONLY`，叠加 torch profiler（0.70 显存、关 stack、窗口 280 步），
+前缀 `qwen3_fp8_nc` / `qwen3_fp4_nc`。
+
+**重要发现**：FULL_DECODE_ONLY 图内的 decode kernel 也被 kineto（CUPTI graph trace）
+完整逐条记录，并非只有回放事件，kernel 级归因仍然可用。但该模式下
+`execute_context_N` 注释的时间片不再可靠，每步耗时请用 **GPU busy 总量 / 步数**：
+NVFP4 ≈ 27.8 ms/步（7.63s/274，GPU busy 99%）、FP8 ≈ 40.1 ms/步（10.99s/274，94%），
+与各自干净跑分 TPOT（26.76 / 34.25 ms）基本吻合。
+
+**FP8**（`prof_traces/qwen3_fp8_nc_kernel_summary.txt`）：
+
+| 阶段 | 主要 kernel（与 eager 模式同构） |
+|---|---|
+| prefill | `fused_moe_kernel` 611ms、`flash_fwd_splitkv` 405ms、`cutlass_3x_gemm_fp8_blockwise` 107ms |
+| decode | `fused_moe_kernel` 4268ms(39%)、`flash_fwd_splitkv` 1933ms(18%)、elementwise copy 1355ms(12%)、`cutlass_3x_gemm_fp8_blockwise` 1161ms(11%) |
+
+**NVFP4**（`prof_traces/qwen3_fp4_nc_kernel_summary.txt`）：
+
+| 阶段 | 主要 kernel |
+|---|---|
+| prefill | `flashinfer::BatchPrefill` 391ms、CUTLASS FP4 分组 GEMM 323ms、`doActivationKernel` 47ms |
+| decode | CUTLASS FP4 分组 GEMM 1511+783+911ms、elementwise copy 1356ms、`flashinfer::BatchPrefill` 842+399ms |
+
+与 eager 模式（4.3/4.5 节）对比：kernel 构成基本一致，说明 FULL_DECODE_ONLY 图
+只是消除 CPU launch 开销，GPU 侧计算图未变；收益主要来自 GPU busy 率提升
+（NVFP4 decode 85%→99%）。profiling 会话中的客户端 TPOT（FP8 59ms / NVFP4 51ms）
+含 profiler 开销与导出阻塞，不作性能参考。
+
 ## 5. OOM 防范规范（GB10 统一内存必读）
 
 统一内存下内存预算合并计算：**vLLM 预留 + profiler 峰值 + 系统 ≈ 121GB，不可超**。
@@ -262,9 +296,12 @@ KV cache 需求估算（FP8 KV）：batch 4 × (8K+1K) ≈ 36K tokens，在 0.70
 | `bench_result.json` | FP8 干净基准结果（graph+compile） |
 | `bench_result_graph_nocompile.json` | FP8 graph+no-compile 基准结果 |
 | `bench_result_nvfp4.json` | NVFP4 干净基准结果（graph+compile） |
+| `bench_result_nvfp4_graph_nocompile.json` | NVFP4 graph+no-compile 基准结果 |
 | `prof_patch/sitecustomize.py` | torch profiler 自动打点补丁（PYTHONPATH 注入） |
 | `prof_traces/*.pt.trace.json.gz` | chrome trace（FP8 / NVFP4 的 prefill+decode kernel 级数据，不入库，见 4.4 节 Release 下载链接） |
-| `prof_traces/qwen3_fp4_kernel_summary.txt` | NVFP4 trace kernel 汇总 |
+| `prof_traces/qwen3_fp4_kernel_summary.txt` | NVFP4 eager trace kernel 汇总 |
+| `prof_traces/qwen3_fp8_nc_kernel_summary.txt` | FP8 graph+no-compile trace kernel 汇总 |
+| `prof_traces/qwen3_fp4_nc_kernel_summary.txt` | NVFP4 graph+no-compile trace kernel 汇总 |
 | `analyze_trace.py` | trace 分析脚本（prefill/decode kernel 汇总） |
 | `download_model.sh` | ModelScope 模型下载脚本 |
 | `task.txt` | 测试任务清单 |

@@ -1,0 +1,32 @@
+trace: prof_traces/qwen3_fp8_nc_dp0_pp0_tp0_dcp0_ep0_rank0.1788180369934047431.pt.trace.json.gz
+prefill chunks: 4, decode steps: 274
+
+=== PREFILL: 4583 kernels | GPU busy 1.45s / wall 2.07s (70%) ===
+      611.4ms     409x  fused_moe_kernel
+      405.1ms     204x  void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<128, 64, 128, 4, false, fal
+      107.0ms     373x  void cutlass::device_kernel<vllm::cutlass_3x_gemm_fp8_blockwise<cutlass::bfloat16_t, 1, 
+       59.5ms     204x  void at::native::reduce_kernel<128, 4, at::native::ReduceOp<c10::BFloat16, at::native::f
+       55.8ms     204x  void vllm::act_and_mul_kernel<c10::BFloat16, __nv_bfloat162, &(c10::BFloat16 vllm::silu_
+       36.7ms     409x  std::enable_if<(((8)>(0)))&&vllm::_typeConvert<c10::BFloat16>::exists, void>::type vllm:
+       33.3ms     204x  void vllm::rotary_embedding_kernel<c10::BFloat16, true>(long const*, c10::BFloat16*, c10
+       32.9ms     409x  void per_token_group_quant_8bit_kernel<c10::BFloat16, __nv_fp8_e4m3, false, false, float
+       29.9ms     408x  void vllm::rms_norm_kernel<c10::BFloat16, 8, 3>(c10::BFloat16*, c10::BFloat16 const*, lo
+       27.0ms     208x  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::Ten
+       18.3ms     409x  void per_token_group_quant_8bit_kernel<c10::BFloat16, __nv_fp8_e4m3, true, false, float>
+       13.9ms       4x  std::enable_if<!(false), void>::type internal::gemvx::kernel<int, int, __nv_bfloat16, __
+
+=== DECODE: 334492 kernels | GPU busy 10.99s / wall 11.66s (94%) ===
+     4267.5ms   26469x  fused_moe_kernel
+     1932.7ms   12966x  void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<128, 64, 128, 4, false, fal
+     1355.0ms   13511x  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::Ten
+     1160.9ms   26085x  void cutlass::device_kernel<vllm::cutlass_3x_gemm_fp8_blockwise<cutlass::bfloat16_t, 128
+      669.2ms     264x  void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_alig
+      426.3ms     269x  void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<128, 64, 128, 4, false, fal
+      187.5ms   12629x  void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x1_tn_alig
+      122.0ms   13235x  void at::native::reduce_kernel<128, 4, at::native::ReduceOp<c10::BFloat16, at::native::f
+      110.2ms     384x  void cutlass::device_kernel<vllm::cutlass_3x_gemm_fp8_blockwise<cutlass::bfloat16_t, 1, 
+      102.3ms   26469x  std::enable_if<(((8)>(0)))&&vllm::_typeConvert<c10::BFloat16>::exists, void>::type vllm:
+       79.4ms   26470x  void vllm::rms_norm_kernel<c10::BFloat16, 8, 3>(c10::BFloat16*, c10::BFloat16 const*, lo
+       75.4ms   27141x  void per_token_group_quant_8bit_kernel<c10::BFloat16, __nv_fp8_e4m3, false, false, float
+
+decode step: 平均 2.7ms  min 0.1  max 55.8

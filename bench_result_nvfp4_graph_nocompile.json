@@ -1,0 +1,45 @@
+{
+  "config": {
+    "input_len": 8192,
+    "output_len": 1024,
+    "batch_size": 4,
+    "model": "qwen3-30b-a3b"
+  },
+  "results": [
+    {
+      "req_id": 0,
+      "prompt_tokens": 8192,
+      "ttft_s": 1.18752024800051,
+      "tpot_ms": 26.746023466275247,
+      "completion_tokens": 1024,
+      "total_time_s": 28.54870225400009
+    },
+    {
+      "req_id": 1,
+      "prompt_tokens": 8192,
+      "ttft_s": 1.1994387270005973,
+      "tpot_ms": 26.758035820135973,
+      "completion_tokens": 1024,
+      "total_time_s": 28.572909370999696
+    },
+    {
+      "req_id": 2,
+      "prompt_tokens": 8192,
+      "ttft_s": 1.1985946889999468,
+      "tpot_ms": 26.758050976540673,
+      "completion_tokens": 1024,
+      "total_time_s": 28.572080838001057
+    },
+    {
+      "req_id": 3,
+      "prompt_tokens": 8192,
+      "ttft_s": 1.197819723000066,
+      "tpot_ms": 26.758047722384635,
+      "completion_tokens": 1024,
+      "total_time_s": 28.571302542999547
+    }
+  ],
+  "batch_elapsed_s": 28.573863583000275,
+  "mean_ttft_ms": 1195.84334675028,
+  "mean_tpot_ms": 26.75503949633413
+}
