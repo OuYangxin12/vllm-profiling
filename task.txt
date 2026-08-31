@@ -1,0 +1,13 @@
+qwen3-30b-a3b FP8：
+    input: 8K
+    output: 1K
+    batch size: 4
+    task: "TTFT, TPOT; get nsys profilling data of prefill and decode"
+
+qwen3-30b-a3b NVFP4：
+    input: 8K
+    output: 1K
+    batch size: 4
+    task: "TTFT, TPOT; get nsys profilling data of prefill and decode"
+
+graph mode, no compile

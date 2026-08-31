@@ -1,0 +1,31 @@
+# ---- 模型权重（体积大，不入库）----
+models/
+
+# ---- 大体积 profiling 产物 ----
+prof_traces/*.pt.trace.json.gz
+prof_traces/*.pt.trace.json
+*.nsys-rep
+*.sqlite
+*.qdstrm
+
+# ---- Docker / 容器挂载点残留 ----
+models/prof_patch/
+models/prof_traces/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---- 临时与日志 ----
+*.log
+*.tmp
+*.incomplete
+.cache/
+
+# ---- IDE ----
+.vscode/
+.idea/
+.qoder/
