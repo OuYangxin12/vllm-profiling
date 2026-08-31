@@ -98,6 +98,20 @@ CUDA Graph 单独启用（无 compile）对 decode 几乎无增益，与 trace �
 decode 12% 时间在 elementwise copy 的结论互相印证——该开销在
 FULL_DECODE_ONLY 图内依然存在，需 compile 融合才能消除。
 
+### NVFP4 对比结果（同参数：8K in / 1K out / batch 4，graph+compile）
+
+启动：同上命令换 `--model /models/Qwen3-30B-A3B-NVFP4`（vLLM 自动识别 ModelOpt NVFP4，
+`quantization=modelopt_fp4`、KV cache `fp8_e4m3`、GEMM 走 `FlashInferCutlassNvFp4LinearKernel`）。
+
+| 指标 | FP8 | NVFP4 | 提升 |
+|---|---|---|---|
+| TTFT 平均 | 1515 ms | **1223 ms** | -19% |
+| TPOT 平均 | 29.15 ms | **19.47 ms** | -33% |
+| 每请求吞吐 | 32.7 tok/s | 48.4 tok/s | +48% |
+| batch 总耗时 | 31.35 s | 21.15 s | |
+
+结果文件：`bench_result_nvfp4.json`；profiling 见第 4.5 节。
+
 ### 其他获取 TTFT/TPOT 的途径
 
 ```bash
@@ -186,6 +200,35 @@ eager 模式代价，CUDA Graph 模式下可基本消除（对应 TPOT 34.15 →
 python3 analyze_trace.py prof_traces/qwen3_fp8_*.pt.trace.json.gz
 ```
 
+### 4.5 NVFP4 profiling 结果
+
+采集方式与 4.2 完全一致（`VLLM_PROF_PREFIX=qwen3_fp4`、窗口 280 步），
+trace：`prof_traces/qwen3_fp4_*.pt.trace.json.gz`，汇总：`prof_traces/qwen3_fp4_kernel_summary.txt`。
+
+**PREFILL**（4 chunks，GPU busy 99%）：
+
+| kernel | 耗时 | 说明 |
+|---|---|---|
+| `flashinfer::BatchPrefillWithPagedKVCacheKernel` | 389 ms | 注意力 |
+| `cutlass GemmUniversal GroupProblemShape` ×2 | 326 ms | FP4 分组 GEMM（MoE 专家） |
+| `tensorrt_llm doActivationKernel`（fp4→bf16） | 46 ms | MoE 激活 |
+| `tensorrt_llm expandInputRowsKernel` | 29 ms | MoE token 重排 |
+
+**DECODE**（274 步，平均 30.8 ms/步，GPU busy 85%）：
+
+| kernel | 耗时 | 占比 |
+|---|---|---|
+| `cutlass` FP4 分组 GEMM（MoE） | 1906 ms | 23% |
+| elementwise copy（eager 开销） | 1338 ms | 16% |
+| `cutlass` 分组 GEMM（另一分支） | 985 ms | 12% |
+| `flashinfer::BatchPrefill`（注意力） | 873 ms | 11% |
+| `cutlass_80_wmma bf16 GEMM` | 692 ms | 8% |
+| `cvt_fp16_to_fp4`（量化转换） | 99 ms | 1% |
+
+对比 FP8：MoE 从 `fused_moe_kernel`（vLLM 自研）切换到 TRT-LLM/CUTLASS FP4 分组 GEMM，
+FP4 带来的带宽收益使 eager decode 从 33.8 降到 30.8 ms/步；elementwise copy 占比
+依旧最高（16%），compile 融合后预计收益更大（对应干净跑分 TPOT 19.47 ms）。
+
 ## 5. OOM 防范规范（GB10 统一内存必读）
 
 统一内存下内存预算合并计算：**vLLM 预留 + profiler 峰值 + 系统 ≈ 121GB，不可超**。
@@ -207,9 +250,12 @@ KV cache 需求估算（FP8 KV）：batch 4 × (8K+1K) ≈ 36K tokens，在 0.70
 |---|---|
 | `start_vllm.sh` | 常规 vLLM 服务启动脚本（CUDA Graph 模式） |
 | `bench_ttft_tpot.py` | TTFT/TPOT 基准脚本（8K in / 1K out / batch 4） |
-| `bench_result.json` | 最近一次干净基准结果 |
+| `bench_result.json` | FP8 干净基准结果（graph+compile） |
+| `bench_result_graph_nocompile.json` | FP8 graph+no-compile 基准结果 |
+| `bench_result_nvfp4.json` | NVFP4 干净基准结果（graph+compile） |
 | `prof_patch/sitecustomize.py` | torch profiler 自动打点补丁（PYTHONPATH 注入） |
-| `prof_traces/*.pt.trace.json.gz` | chrome trace（prefill + decode kernel 级数据） |
+| `prof_traces/*.pt.trace.json.gz` | chrome trace（FP8 / NVFP4 的 prefill+decode kernel 级数据） |
+| `prof_traces/qwen3_fp4_kernel_summary.txt` | NVFP4 trace kernel 汇总 |
 | `analyze_trace.py` | trace 分析脚本（prefill/decode kernel 汇总） |
 | `download_model.sh` | ModelScope 模型下载脚本 |
 | `task.txt` | 测试任务清单 |
