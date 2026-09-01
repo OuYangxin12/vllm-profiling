@@ -327,6 +327,23 @@ median 19.72ms ≈ TPOT。两版 summary：`qwen3_fp{8,4}_v5_stats.txt`（`nsys 
 曲线，采集时加 `--gpu-metrics-devices=all`（需 `--privileged`，且同一 GPU 上
 不能与其他 nsys GPU-metrics 会话并发）。
 
+#### CUPTI 尾部丢失问题与窗口模式修正（2026-09-01 v6 实验）
+
+- **全程采集存在 CUPTI 尾部丢事件**：`--cuda-flush-interval=1000` 可把丢失从
+  ~1.9s（67 步）减到 ~0.8s（27 步），但无法归零（丢失锚定在最后一段 CUPTI 活动，
+  与停止时机无关，负载后空闲 10s 也无效）。判别方法：NVTX（CPU 侧注入）仍在推进
+  而 KERNEL/RUNTIME/MEMCPY 同时归零 → CUPTI 停采，非 GPU 空闲。
+- **窗口模式结论修正**：早期“capture-range=cudaProfilerApi 模式 KERNEL 表缺失”
+  实为 v3 时代 2025.6.3 版本回归的混淆；**2025.3.2 + 窗口模式完全可用**，且
+  cudaProfilerStop 触发 buffer 强制 flush，**彻底解决尾部丢失**。
+- **v6 窗口模式产物**（`VLLM_CUDA_PROFILER_START_AT_STEP=9 STOP_AT_STEP=145
+  bash run_verify_nsys.sh fp8` 配合 `V5_OUT=qwen3_fp8_v6`）：
+  `nsys_reports/qwen3_fp8_v6.nsys-rep`（11MB，140,947 条 kernel，仅覆盖 warmup 尾部
+  + 基准段）：decode **129 步全部完整**（1,072 kernel/步，busy/步 median 29.68ms
+  ≈ 步周期 29.80ms ≈ 99.6% GPU busy），prefill 4 chunks 齐全，唯一空步为 stop 后
+  shutdown 伪步（tokens0）。**逐 kernel 归因优先用 v6**；v5 全程报告保留
+  加载/Graph 捕获期全时间线（尾部 ~0.8s 负载段缺失，归因只用到 step116）。
+
 ## 5. OOM 防范规范（GB10 统一内存必读）
 
 统一内存下内存预算合并计算：**vLLM 预留 + profiler 峰值 + 系统 ≈ 121GB，不可超**。

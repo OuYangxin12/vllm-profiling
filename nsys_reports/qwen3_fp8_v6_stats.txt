@@ -1,0 +1,343 @@
+
+NOTICE: Existing SQLite export found: nsys_reports/qwen3_fp8_v6.sqlite
+        It is assumed file was previously exported from: nsys_reports/qwen3_fp8_v6.nsys-rep
+        Consider using --force-export=true if needed.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/nvtx_sum.py]... 
+
+ ** NVTX Range Summary (nvtx_sum):
+
+ Time (%)  Total Time (ns)  Instances    Avg (ns)       Med (ns)      Min (ns)     Max (ns)    StdDev (ns)   Style             Range           
+ --------  ---------------  ---------  -------------  -------------  -----------  -----------  -----------  -------  --------------------------
+     24.2      420,292,912          1  420,292,912.0  420,292,912.0  420,292,912  420,292,912          0.0  PushPop  :decode_step14_tokens49   
+     20.8      361,246,864          1  361,246,864.0  361,246,864.0  361,246,864  361,246,864          0.0  PushPop  :prefill_step13_tokens2048
+     18.3      318,345,392          1  318,345,392.0  318,345,392.0  318,345,392  318,345,392          0.0  PushPop  :prefill_step12_tokens2048
+     14.7      255,819,888          1  255,819,888.0  255,819,888.0  255,819,888  255,819,888          0.0  PushPop  :prefill_step11_tokens2048
+      2.3       39,243,728          1   39,243,728.0   39,243,728.0   39,243,728   39,243,728          0.0  PushPop  :decode_step141_tokens3   
+      2.0       34,655,984          1   34,655,984.0   34,655,984.0   34,655,984   34,655,984          0.0  PushPop  :prefill_step10_tokens2048
+      0.2        4,266,736          1    4,266,736.0    4,266,736.0    4,266,736    4,266,736          0.0  PushPop  :decode_step76_tokens4    
+      0.2        4,219,280          1    4,219,280.0    4,219,280.0    4,219,280    4,219,280          0.0  PushPop  :decode_step20_tokens4    
+      0.2        4,003,312          1    4,003,312.0    4,003,312.0    4,003,312    4,003,312          0.0  PushPop  :decode_step33_tokens4    
+      0.2        3,961,824          1    3,961,824.0    3,961,824.0    3,961,824    3,961,824          0.0  PushPop  :decode_step92_tokens4    
+      0.2        3,879,872          1    3,879,872.0    3,879,872.0    3,879,872    3,879,872          0.0  PushPop  :decode_step85_tokens4    
+      0.2        3,795,264          1    3,795,264.0    3,795,264.0    3,795,264    3,795,264          0.0  PushPop  :decode_step105_tokens4   
+      0.2        3,655,680          1    3,655,680.0    3,655,680.0    3,655,680    3,655,680          0.0  PushPop  :decode_step70_tokens4    
+      0.2        3,486,000          1    3,486,000.0    3,486,000.0    3,486,000    3,486,000          0.0  PushPop  :decode_step15_tokens4    
+      0.2        3,476,224          1    3,476,224.0    3,476,224.0    3,476,224    3,476,224          0.0  PushPop  :decode_step47_tokens4    
+      0.2        3,359,904          1    3,359,904.0    3,359,904.0    3,359,904    3,359,904          0.0  PushPop  :decode_step17_tokens4    
+      0.2        3,314,208          1    3,314,208.0    3,314,208.0    3,314,208    3,314,208          0.0  PushPop  :decode_step81_tokens4    
+      0.2        3,204,256          1    3,204,256.0    3,204,256.0    3,204,256    3,204,256          0.0  PushPop  :decode_step16_tokens4    
+      0.2        2,922,368          1    2,922,368.0    2,922,368.0    2,922,368    2,922,368          0.0  PushPop  :decode_step56_tokens4    
+      0.2        2,901,072          1    2,901,072.0    2,901,072.0    2,901,072    2,901,072          0.0  PushPop  :decode_step71_tokens4    
+      0.2        2,897,328          1    2,897,328.0    2,897,328.0    2,897,328    2,897,328          0.0  PushPop  :decode_step77_tokens4    
+      0.2        2,879,504          1    2,879,504.0    2,879,504.0    2,879,504    2,879,504          0.0  PushPop  :decode_step57_tokens4    
+      0.2        2,835,920          1    2,835,920.0    2,835,920.0    2,835,920    2,835,920          0.0  PushPop  :decode_step27_tokens4    
+      0.2        2,805,344          1    2,805,344.0    2,805,344.0    2,805,344    2,805,344          0.0  PushPop  :decode_step96_tokens4    
+      0.2        2,686,416          1    2,686,416.0    2,686,416.0    2,686,416    2,686,416          0.0  PushPop  :decode_step29_tokens4    
+      0.2        2,663,392          1    2,663,392.0    2,663,392.0    2,663,392    2,663,392          0.0  PushPop  :decode_step78_tokens4    
+      0.2        2,658,416          1    2,658,416.0    2,658,416.0    2,658,416    2,658,416          0.0  PushPop  :decode_step49_tokens4    
+      0.2        2,650,192          1    2,650,192.0    2,650,192.0    2,650,192    2,650,192          0.0  PushPop  :decode_step88_tokens4    
+      0.2        2,626,304          1    2,626,304.0    2,626,304.0    2,626,304    2,626,304          0.0  PushPop  :decode_step22_tokens4    
+      0.1        2,548,080          1    2,548,080.0    2,548,080.0    2,548,080    2,548,080          0.0  PushPop  :decode_step18_tokens4    
+      0.1        2,546,720          1    2,546,720.0    2,546,720.0    2,546,720    2,546,720          0.0  PushPop  :decode_step55_tokens4    
+      0.1        2,528,240          1    2,528,240.0    2,528,240.0    2,528,240    2,528,240          0.0  PushPop  :decode_step60_tokens4    
+      0.1        2,468,512          1    2,468,512.0    2,468,512.0    2,468,512    2,468,512          0.0  PushPop  :decode_step93_tokens4    
+      0.1        2,467,392          1    2,467,392.0    2,467,392.0    2,467,392    2,467,392          0.0  PushPop  :decode_step74_tokens4    
+      0.1        2,462,736          1    2,462,736.0    2,462,736.0    2,462,736    2,462,736          0.0  PushPop  :decode_step72_tokens4    
+      0.1        2,445,616          1    2,445,616.0    2,445,616.0    2,445,616    2,445,616          0.0  PushPop  :decode_step58_tokens4    
+      0.1        2,444,704          1    2,444,704.0    2,444,704.0    2,444,704    2,444,704          0.0  PushPop  :decode_step21_tokens4    
+      0.1        2,439,872          1    2,439,872.0    2,439,872.0    2,439,872    2,439,872          0.0  PushPop  :decode_step19_tokens4    
+      0.1        2,436,976          1    2,436,976.0    2,436,976.0    2,436,976    2,436,976          0.0  PushPop  :decode_step82_tokens4    
+      0.1        2,410,928          1    2,410,928.0    2,410,928.0    2,410,928    2,410,928          0.0  PushPop  :decode_step23_tokens4    
+      0.1        2,405,328          1    2,405,328.0    2,405,328.0    2,405,328    2,405,328          0.0  PushPop  :decode_step59_tokens4    
+      0.1        2,401,552          1    2,401,552.0    2,401,552.0    2,401,552    2,401,552          0.0  PushPop  :decode_step115_tokens4   
+      0.1        2,390,000          1    2,390,000.0    2,390,000.0    2,390,000    2,390,000          0.0  PushPop  :decode_step139_tokens4   
+      0.1        2,379,568          1    2,379,568.0    2,379,568.0    2,379,568    2,379,568          0.0  PushPop  :decode_step89_tokens4    
+      0.1        2,377,872          1    2,377,872.0    2,377,872.0    2,377,872    2,377,872          0.0  PushPop  :decode_step84_tokens4    
+      0.1        2,369,776          1    2,369,776.0    2,369,776.0    2,369,776    2,369,776          0.0  PushPop  :decode_step91_tokens4    
+      0.1        2,363,616          1    2,363,616.0    2,363,616.0    2,363,616    2,363,616          0.0  PushPop  :decode_step79_tokens4    
+      0.1        2,360,160          1    2,360,160.0    2,360,160.0    2,360,160    2,360,160          0.0  PushPop  :decode_step65_tokens4    
+      0.1        2,329,664          1    2,329,664.0    2,329,664.0    2,329,664    2,329,664          0.0  PushPop  :decode_step24_tokens4    
+      0.1        2,324,272          1    2,324,272.0    2,324,272.0    2,324,272    2,324,272          0.0  PushPop  :decode_step86_tokens4    
+      0.1        2,304,720          1    2,304,720.0    2,304,720.0    2,304,720    2,304,720          0.0  PushPop  :decode_step90_tokens4    
+      0.1        2,298,896          1    2,298,896.0    2,298,896.0    2,298,896    2,298,896          0.0  PushPop  :decode_step73_tokens4    
+      0.1        2,295,424          1    2,295,424.0    2,295,424.0    2,295,424    2,295,424          0.0  PushPop  :decode_step62_tokens4    
+      0.1        2,293,552          1    2,293,552.0    2,293,552.0    2,293,552    2,293,552          0.0  PushPop  :decode_step64_tokens4    
+      0.1        2,293,264          1    2,293,264.0    2,293,264.0    2,293,264    2,293,264          0.0  PushPop  :decode_step25_tokens4    
+      0.1        2,292,368          1    2,292,368.0    2,292,368.0    2,292,368    2,292,368          0.0  PushPop  :decode_step83_tokens4    
+      0.1        2,289,232          1    2,289,232.0    2,289,232.0    2,289,232    2,289,232          0.0  PushPop  :decode_step106_tokens4   
+      0.1        2,287,840          1    2,287,840.0    2,287,840.0    2,287,840    2,287,840          0.0  PushPop  :decode_step51_tokens4    
+      0.1        2,287,008          1    2,287,008.0    2,287,008.0    2,287,008    2,287,008          0.0  PushPop  :decode_step28_tokens4    
+      0.1        2,280,048          1    2,280,048.0    2,280,048.0    2,280,048    2,280,048          0.0  PushPop  :decode_step66_tokens4    
+      0.1        2,273,456          1    2,273,456.0    2,273,456.0    2,273,456    2,273,456          0.0  PushPop  :decode_step75_tokens4    
+      0.1        2,273,328          1    2,273,328.0    2,273,328.0    2,273,328    2,273,328          0.0  PushPop  :decode_step80_tokens4    
+      0.1        2,271,904          1    2,271,904.0    2,271,904.0    2,271,904    2,271,904          0.0  PushPop  :decode_step107_tokens4   
+      0.1        2,271,632          1    2,271,632.0    2,271,632.0    2,271,632    2,271,632          0.0  PushPop  :decode_step54_tokens4    
+      0.1        2,271,008          1    2,271,008.0    2,271,008.0    2,271,008    2,271,008          0.0  PushPop  :decode_step87_tokens4    
+      0.1        2,266,320          1    2,266,320.0    2,266,320.0    2,266,320    2,266,320          0.0  PushPop  :decode_step37_tokens4    
+      0.1        2,265,680          1    2,265,680.0    2,265,680.0    2,265,680    2,265,680          0.0  PushPop  :decode_step53_tokens4    
+      0.1        2,264,416          1    2,264,416.0    2,264,416.0    2,264,416    2,264,416          0.0  PushPop  :decode_step26_tokens4    
+      0.1        2,260,272          1    2,260,272.0    2,260,272.0    2,260,272    2,260,272          0.0  PushPop  :decode_step63_tokens4    
+      0.1        2,259,840          1    2,259,840.0    2,259,840.0    2,259,840    2,259,840          0.0  PushPop  :decode_step50_tokens4    
+      0.1        2,258,432          1    2,258,432.0    2,258,432.0    2,258,432    2,258,432          0.0  PushPop  :decode_step48_tokens4    
+      0.1        2,257,872          1    2,257,872.0    2,257,872.0    2,257,872    2,257,872          0.0  PushPop  :decode_step108_tokens4   
+      0.1        2,257,264          1    2,257,264.0    2,257,264.0    2,257,264    2,257,264          0.0  PushPop  :decode_step111_tokens4   
+      0.1        2,255,696          1    2,255,696.0    2,255,696.0    2,255,696    2,255,696          0.0  PushPop  :decode_step110_tokens4   
+      0.1        2,253,632          1    2,253,632.0    2,253,632.0    2,253,632    2,253,632          0.0  PushPop  :decode_step34_tokens4    
+      0.1        2,252,736          1    2,252,736.0    2,252,736.0    2,252,736    2,252,736          0.0  PushPop  :decode_step45_tokens4    
+      0.1        2,250,656          1    2,250,656.0    2,250,656.0    2,250,656    2,250,656          0.0  PushPop  :decode_step112_tokens4   
+      0.1        2,246,992          1    2,246,992.0    2,246,992.0    2,246,992    2,246,992          0.0  PushPop  :decode_step123_tokens4   
+      0.1        2,246,224          1    2,246,224.0    2,246,224.0    2,246,224    2,246,224          0.0  PushPop  :decode_step69_tokens4    
+      0.1        2,246,048          1    2,246,048.0    2,246,048.0    2,246,048    2,246,048          0.0  PushPop  :decode_step67_tokens4    
+      0.1        2,240,016          1    2,240,016.0    2,240,016.0    2,240,016    2,240,016          0.0  PushPop  :decode_step109_tokens4   
+      0.1        2,237,472          1    2,237,472.0    2,237,472.0    2,237,472    2,237,472          0.0  PushPop  :decode_step61_tokens4    
+      0.1        2,235,984          1    2,235,984.0    2,235,984.0    2,235,984    2,235,984          0.0  PushPop  :decode_step52_tokens4    
+      0.1        2,230,624          1    2,230,624.0    2,230,624.0    2,230,624    2,230,624          0.0  PushPop  :decode_step32_tokens4    
+      0.1        2,226,816          1    2,226,816.0    2,226,816.0    2,226,816    2,226,816          0.0  PushPop  :decode_step46_tokens4    
+      0.1        2,223,536          1    2,223,536.0    2,223,536.0    2,223,536    2,223,536          0.0  PushPop  :decode_step68_tokens4    
+      0.1        2,214,688          1    2,214,688.0    2,214,688.0    2,214,688    2,214,688          0.0  PushPop  :decode_step94_tokens4    
+      0.1        2,213,392          1    2,213,392.0    2,213,392.0    2,213,392    2,213,392          0.0  PushPop  :decode_step95_tokens4    
+      0.1        2,210,000          1    2,210,000.0    2,210,000.0    2,210,000    2,210,000          0.0  PushPop  :decode_step103_tokens4   
+      0.1        2,209,072          1    2,209,072.0    2,209,072.0    2,209,072    2,209,072          0.0  PushPop  :decode_step101_tokens4   
+      0.1        2,208,240          1    2,208,240.0    2,208,240.0    2,208,240    2,208,240          0.0  PushPop  :decode_step119_tokens4   
+      0.1        2,207,936          1    2,207,936.0    2,207,936.0    2,207,936    2,207,936          0.0  PushPop  :decode_step36_tokens4    
+      0.1        2,206,896          1    2,206,896.0    2,206,896.0    2,206,896    2,206,896          0.0  PushPop  :decode_step35_tokens4    
+      0.1        2,204,560          1    2,204,560.0    2,204,560.0    2,204,560    2,204,560          0.0  PushPop  :decode_step99_tokens4    
+      0.1        2,200,640          1    2,200,640.0    2,200,640.0    2,200,640    2,200,640          0.0  PushPop  :decode_step114_tokens4   
+      0.1        2,200,512          1    2,200,512.0    2,200,512.0    2,200,512    2,200,512          0.0  PushPop  :decode_step97_tokens4    
+      0.1        2,193,424          1    2,193,424.0    2,193,424.0    2,193,424    2,193,424          0.0  PushPop  :decode_step121_tokens4   
+      0.1        2,187,248          1    2,187,248.0    2,187,248.0    2,187,248    2,187,248          0.0  PushPop  :decode_step98_tokens4    
+      0.1        2,184,560          1    2,184,560.0    2,184,560.0    2,184,560    2,184,560          0.0  PushPop  :decode_step132_tokens4   
+      0.1        2,183,120          1    2,183,120.0    2,183,120.0    2,183,120    2,183,120          0.0  PushPop  :decode_step44_tokens4    
+      0.1        2,176,352          1    2,176,352.0    2,176,352.0    2,176,352    2,176,352          0.0  PushPop  :decode_step38_tokens4    
+      0.1        2,175,072          1    2,175,072.0    2,175,072.0    2,175,072    2,175,072          0.0  PushPop  :decode_step134_tokens4   
+      0.1        2,172,880          1    2,172,880.0    2,172,880.0    2,172,880    2,172,880          0.0  PushPop  :decode_step31_tokens4    
+      0.1        2,171,040          1    2,171,040.0    2,171,040.0    2,171,040    2,171,040          0.0  PushPop  :decode_step40_tokens4    
+      0.1        2,169,424          1    2,169,424.0    2,169,424.0    2,169,424    2,169,424          0.0  PushPop  :decode_step120_tokens4   
+      0.1        2,168,128          1    2,168,128.0    2,168,128.0    2,168,128    2,168,128          0.0  PushPop  :decode_step100_tokens4   
+      0.1        2,164,400          1    2,164,400.0    2,164,400.0    2,164,400    2,164,400          0.0  PushPop  :decode_step118_tokens4   
+      0.1        2,148,656          1    2,148,656.0    2,148,656.0    2,148,656    2,148,656          0.0  PushPop  :decode_step116_tokens4   
+      0.1        2,146,944          1    2,146,944.0    2,146,944.0    2,146,944    2,146,944          0.0  PushPop  :decode_step117_tokens4   
+      0.1        2,145,328          1    2,145,328.0    2,145,328.0    2,145,328    2,145,328          0.0  PushPop  :decode_step41_tokens4    
+      0.1        2,143,920          1    2,143,920.0    2,143,920.0    2,143,920    2,143,920          0.0  PushPop  :decode_step125_tokens4   
+      0.1        2,141,024          1    2,141,024.0    2,141,024.0    2,141,024    2,141,024          0.0  PushPop  :decode_step135_tokens4   
+      0.1        2,134,960          1    2,134,960.0    2,134,960.0    2,134,960    2,134,960          0.0  PushPop  :decode_step39_tokens4    
+      0.1        2,134,688          1    2,134,688.0    2,134,688.0    2,134,688    2,134,688          0.0  PushPop  :decode_step137_tokens4   
+      0.1        2,131,680          1    2,131,680.0    2,131,680.0    2,131,680    2,131,680          0.0  PushPop  :decode_step104_tokens4   
+      0.1        2,118,976          1    2,118,976.0    2,118,976.0    2,118,976    2,118,976          0.0  PushPop  :decode_step133_tokens4   
+      0.1        2,117,536          1    2,117,536.0    2,117,536.0    2,117,536    2,117,536          0.0  PushPop  :decode_step122_tokens4   
+      0.1        2,112,464          1    2,112,464.0    2,112,464.0    2,112,464    2,112,464          0.0  PushPop  :decode_step128_tokens4   
+      0.1        2,110,960          1    2,110,960.0    2,110,960.0    2,110,960    2,110,960          0.0  PushPop  :decode_step131_tokens4   
+      0.1        2,109,904          1    2,109,904.0    2,109,904.0    2,109,904    2,109,904          0.0  PushPop  :decode_step130_tokens4   
+      0.1        2,107,952          1    2,107,952.0    2,107,952.0    2,107,952    2,107,952          0.0  PushPop  :decode_step136_tokens4   
+      0.1        2,107,696          1    2,107,696.0    2,107,696.0    2,107,696    2,107,696          0.0  PushPop  :decode_step102_tokens4   
+      0.1        2,107,600          1    2,107,600.0    2,107,600.0    2,107,600    2,107,600          0.0  PushPop  :decode_step126_tokens4   
+      0.1        2,100,640          1    2,100,640.0    2,100,640.0    2,100,640    2,100,640          0.0  PushPop  :decode_step124_tokens4   
+      0.1        2,100,128          1    2,100,128.0    2,100,128.0    2,100,128    2,100,128          0.0  PushPop  :decode_step138_tokens4   
+      0.1        2,099,728          1    2,099,728.0    2,099,728.0    2,099,728    2,099,728          0.0  PushPop  :decode_step140_tokens4   
+      0.1        2,088,432          1    2,088,432.0    2,088,432.0    2,088,432    2,088,432          0.0  PushPop  :decode_step30_tokens4    
+      0.1        2,087,984          1    2,087,984.0    2,087,984.0    2,087,984    2,087,984          0.0  PushPop  :decode_step127_tokens4   
+      0.1        2,084,448          1    2,084,448.0    2,084,448.0    2,084,448    2,084,448          0.0  PushPop  :decode_step129_tokens4   
+      0.1        2,083,072          1    2,083,072.0    2,083,072.0    2,083,072    2,083,072          0.0  PushPop  :decode_step113_tokens4   
+      0.1        2,055,216          1    2,055,216.0    2,055,216.0    2,055,216    2,055,216          0.0  PushPop  :decode_step42_tokens4    
+      0.1        2,054,976          1    2,054,976.0    2,054,976.0    2,054,976    2,054,976          0.0  PushPop  :decode_step43_tokens4    
+      0.1        1,404,576         16       87,786.0          472.0          112      270,752    105,490.2  PushPop  NCCL:ncclGroupStart       
+      0.0          410,320          1      410,320.0      410,320.0      410,320      410,320          0.0  PushPop  :decode_step142_tokens0   
+      0.0          235,280          1      235,280.0      235,280.0      235,280      235,280          0.0  PushPop  :decode_step143_tokens0   
+      0.0           14,896         16          931.0          664.0          208        2,864        858.9  PushPop  NCCL:ncclGroupEnd         
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/osrt_sum.py]... 
+
+ ** OS Runtime Summary (osrt_sum):
+
+ Time (%)  Total Time (ns)  Num Calls     Avg (ns)         Med (ns)        Min (ns)        Max (ns)       StdDev (ns)             Name         
+ --------  ---------------  ---------  ---------------  ---------------  -------------  --------------  ---------------  ----------------------
+     35.7  125,076,306,224      1,480     84,511,017.7    100,159,080.0          1,024   4,000,279,568    199,949,513.0  pthread_cond_timedwait
+     30.9  108,356,712,032      8,950     12,106,895.2     10,153,600.0          1,120   8,317,289,376     89,013,026.8  epoll_wait            
+     11.8   41,477,417,792        714     58,091,621.6          3,736.0          1,008   2,271,784,224    156,705,303.7  poll                  
+      7.5   26,174,919,024        624     41,946,985.6          2,704.0          1,008   2,074,262,448    163,219,446.7  epoll_pwait           
+      6.9   24,201,196,272        275     88,004,350.1     28,970,992.0        110,784   6,580,956,032    560,137,346.8  sem_wait              
+      5.9   20,729,597,408          3  6,909,865,802.7  8,857,428,016.0  1,871,796,624  10,000,372,768  4,400,362,083.2  sem_clockwait         
+      1.0    3,366,141,472        313     10,754,445.6          2,432.0          1,024   3,362,695,664    190,070,186.5  read                  
+      0.2      668,906,896          2    334,453,448.0    334,453,448.0          2,192     668,904,704    472,985,502.2  waitpid               
+      0.1      500,951,328        242      2,070,046.8          2,592.0          1,008      48,327,952      3,824,536.4  ioctl                 
+      0.0       88,851,264          1     88,851,264.0     88,851,264.0     88,851,264      88,851,264              0.0  pthread_cond_wait     
+      0.0       38,192,208         49        779,432.8        111,360.0         12,784      10,288,080      2,153,267.0  pthread_join          
+      0.0       11,217,520         18        623,195.6          5,832.0          1,024       9,066,848      2,114,093.8  futex                 
+      0.0       10,723,312        830         12,919.7          7,832.0          1,104         130,432         13,301.1  write                 
+      0.0        4,002,464        157         25,493.4         10,000.0          2,832         355,984         54,577.6  recv                  
+      0.0        2,485,024        154         16,136.5         12,672.0          1,696          76,144         13,616.0  send                  
+      0.0        2,102,544          2      1,051,272.0      1,051,272.0        681,376       1,421,168        523,111.9  fopen                 
+      0.0        1,559,664         10        155,966.4        112,728.0         46,720         438,560        118,064.9  pthread_create        
+      0.0        1,446,704        457          3,165.7          1,888.0          1,008         150,736          7,149.2  pthread_cond_signal   
+      0.0        1,363,136         29         47,004.7         14,064.0          1,040         462,064         99,919.1  pthread_mutex_lock    
+      0.0          573,312        148          3,873.7          3,976.0          1,008           8,976          1,917.1  epoll_ctl             
+      0.0          349,760         64          5,465.0          3,680.0          1,040          52,416          7,115.0  close                 
+      0.0          341,312          4         85,328.0         74,704.0         11,520         180,384         84,722.8  pthread_rwlock_wrlock 
+      0.0          302,336         83          3,642.6          2,976.0          1,040          17,712          2,900.5  stat64                
+      0.0          163,152         98          1,664.8          1,152.0          1,008          27,760          2,765.7  pthread_cond_broadcast
+      0.0          138,432          5         27,686.4         22,704.0          4,384          71,168         27,047.4  writev                
+      0.0          113,776         17          6,692.7          5,360.0          1,632          17,376          4,707.0  open64                
+      0.0           79,408         10          7,940.8          7,624.0          2,240          12,000          2,696.7  mmap64                
+      0.0           33,584          3         11,194.7          7,072.0          4,912          21,600          9,075.8  socketpair            
+      0.0           26,240          2         13,120.0         13,120.0         12,480          13,760            905.1  pthread_rwlock_rdlock 
+      0.0           24,688          3          8,229.3          6,304.0          5,728          12,656          3,844.4  accept4               
+      0.0           11,152          1         11,152.0         11,152.0         11,152          11,152              0.0  fwrite                
+      0.0            8,976          5          1,795.2          1,456.0          1,088           3,248            893.8  fstat64               
+      0.0            7,520          1          7,520.0          7,520.0          7,520           7,520              0.0  lstat64               
+      0.0            5,184          1          5,184.0          5,184.0          5,184           5,184              0.0  kill                  
+      0.0            3,664          2          1,832.0          1,832.0          1,216           2,448            871.2  sigaction             
+      0.0            3,504          2          1,752.0          1,752.0          1,056           2,448            984.3  fcntl64               
+      0.0            2,096          2          1,048.0          1,048.0          1,040           1,056             11.3  fflush                
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/cuda_api_sum.py]... 
+
+ ** CUDA API Summary (cuda_api_sum):
+
+ Time (%)  Total Time (ns)  Num Calls    Avg (ns)       Med (ns)      Min (ns)     Max (ns)    StdDev (ns)             Name          
+ --------  ---------------  ---------  -------------  -------------  -----------  -----------  ------------  ------------------------
+     71.0    5,235,197,200        267   19,607,480.1       13,056.0        3,168  410,697,200  42,598,812.5  cudaEventSynchronize    
+      6.8      502,155,216         54    9,299,170.7    9,063,688.0       80,304   53,157,200   6,883,031.4  cudaFree                
+      5.5      406,990,064          1  406,990,064.0  406,990,064.0  406,990,064  406,990,064           0.0  cuModuleLoadData        
+      5.4      396,847,712        900      440,941.9        9,808.0        2,208    5,063,808     732,840.8  cuLaunchKernel          
+      3.5      258,565,760        708      365,205.9        5,736.0        2,400    2,502,496     720,769.2  cuLaunchKernelEx        
+      3.1      225,607,216      4,187       53,882.8        5,504.0        2,336    6,778,096     142,575.4  cudaLaunchKernel        
+      2.7      196,093,856        176    1,114,169.6    1,358,056.0       23,104    3,267,120     716,469.0  cudaGraphLaunch         
+      1.2       88,918,496      2,534       35,090.2       20,064.0        9,008    1,716,784     111,074.5  cudaGraphExecDestroy    
+      0.4       30,704,784      1,646       18,654.2        4,448.0        2,048      359,856      39,935.3  cudaMemcpyAsync         
+      0.4       26,925,856          1   26,925,856.0   26,925,856.0   26,925,856   26,925,856           0.0  cuLibraryLoadData       
+      0.0        1,322,784        132       10,021.1        9,584.0        5,872       32,336       4,081.8  cudaMemsetAsync         
+      0.0          569,104        267        2,131.5        1,456.0          496      198,752      12,138.8  cudaEventRecord         
+      0.0          446,000        263        1,695.8        1,696.0          576       21,568       1,705.1  cudaEventQuery          
+      0.0          394,384        266        1,482.6        1,224.0          432       29,328       2,794.9  cudaEventRecordWithFlags
+      0.0          390,896      1,461          267.6          160.0           96        5,984         287.8  cudaStreamIsCapturing   
+      0.0          383,248        265        1,446.2        1,264.0          304       11,248       1,343.2  cudaEventCreateWithFlags
+      0.0          366,560      4,187           87.5           48.0            0        9,120         184.4  cuKernelGetName         
+      0.0          348,768        132        2,642.2        2,456.0        1,248        6,688         965.0  cudaStreamWaitEvent     
+      0.0          285,168        264        1,080.2          528.0          272      147,344       9,044.4  cudaEventDestroy        
+      0.0          214,096        128        1,672.6        1,568.0          848        6,480         896.7  cuKernelGetFunction     
+      0.0          174,960          1      174,960.0      174,960.0      174,960      174,960           0.0  cudaDeviceSynchronize   
+      0.0          170,400          5       34,080.0       17,168.0        9,552       83,280      30,456.9  cudaHostAlloc           
+      0.0          152,176      1,152          132.1           64.0           32       53,216       1,568.7  cuTensorMapEncodeTiled  
+      0.0           36,096        192          188.0          160.0          112        1,648         134.4  cuKernelSetAttribute    
+      0.0            4,848          2        2,424.0        2,424.0          720        4,128       2,409.8  cuLibraryGetKernel      
+      0.0            4,384          1        4,384.0        4,384.0        4,384        4,384           0.0  cuProfilerStart         
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/cuda_gpu_kern_sum.py]... 
+
+ ** CUDA GPU Kernel Summary (cuda_gpu_kern_sum):
+
+ Time (%)  Total Time (ns)  Instances   Avg (ns)     Med (ns)    Min (ns)   Max (ns)   StdDev (ns)                                                  Name                                                
+ --------  ---------------  ---------  -----------  -----------  ---------  ---------  -----------  ----------------------------------------------------------------------------------------------------
+     48.2    2,527,515,644     12,672    199,456.7    180,768.0     72,544  2,577,792    256,395.0  fused_moe_kernel                                                                                    
+     13.0      682,619,062      6,096    111,978.2    110,720.0    101,824    381,952      9,596.6  void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<(int)128, (int)64, (int)128, (int)4, (…
+     10.6      558,087,898     12,288     45,417.3     46,112.0     36,896    145,856      4,352.5  void cutlass::device_kernel<vllm::cutlass_3x_gemm_fp8_blockwise<cutlass::bfloat16_t, (int)128, (int…
+      7.9      412,957,472        240  1,720,656.1  1,506,256.0    560,064  3,720,512  1,096,239.5  void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<(int)128, (int)64, (int)128, (int)4, (…
+      6.4      336,618,176        128  2,629,829.5  2,613,200.0  2,598,528  3,477,536     87,170.0  void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Par…
+      2.0      105,669,376        384    275,180.7    295,792.0    214,880    536,256     55,679.3  void cutlass::device_kernel<vllm::cutlass_3x_gemm_fp8_blockwise<cutlass::bfloat16_t, (int)1, (int)1…
+      1.8       92,803,839      6,096     15,223.7     14,496.0     13,888    126,720      3,245.7  void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x1_tn_align8>(T1::Par…
+      1.7       89,794,040      6,336     14,172.0      4,480.0      4,256    388,512     54,125.0  void at::native::reduce_kernel<(int)128, (int)4, at::native::ReduceOp<c10::BFloat16, at::native::fu…
+      1.1       58,976,640        240    245,736.0    302,352.0      5,856    369,536    119,938.3  void vllm::act_and_mul_kernel<c10::BFloat16, __nv_bfloat162, &vllm::silu_kernel<c10::BFloat16>, &vl…
+      1.0       53,021,789     12,672      4,184.2      1,536.0      1,376    215,808     19,076.6  void per_token_group_quant_8bit_kernel<c10::BFloat16, __nv_fp8_e4m3, (bool)0, (bool)0, float>(const…
+      1.0       50,955,228      6,336      8,042.2      2,784.0      2,496    237,248     28,953.0  triton_red_fused__to_copy_add_mean_moe_forward_mul_pow_rsqrt_0                                      
+      0.8       42,738,590      6,204      6,888.9      3,584.0      3,360    286,720     18,396.0  void vllm::rms_norm_per_block_quant_kernel<c10::BFloat16, c10::Float8_e4m3fn, (bool)1, (bool)1, (in…
+      0.8       39,923,936      6,204      6,435.2      1,312.0      1,248    200,224     28,561.4  triton_poi_fused_3                                                                                  
+      0.6       31,355,323      6,336      4,948.8      4,000.0      1,728    132,864      7,766.8  void vllm::reshape_and_cache_flash_kernel<__nv_bfloat16, __nv_bfloat16, (vllm::Fp8KVCacheDataType)0…
+      0.5       24,835,389      6,336      3,919.7      1,536.0      1,472    132,864     13,347.2  void per_token_group_quant_8bit_kernel<c10::BFloat16, __nv_fp8_e4m3, (bool)1, (bool)0, float>(const…
+      0.5       24,607,035     12,192      2,018.3      1,984.0      1,856     82,624        996.5  void at::native::elementwise_kernel<(int)128, (int)4, void at::native::gpu_kernel_impl_nocast<at::n…
+      0.4       22,629,497      6,096      3,712.2      3,616.0      3,488     27,648        549.7  void flash::flash_fwd_splitkv_combine_kernel<Flash_fwd_kernel_traits<(int)128, (int)64, (int)128, (…
+      0.4       22,346,267      6,336      3,526.9      3,424.0      3,360     15,456        553.1  void vllm::moe::topkGating<(int)8, (int)128, (int)4, (int)16, (int)32, int, __nv_bfloat16, (vllm::m…
+      0.3       13,674,944          4  3,418,736.0  3,400,352.0  3,393,376  3,480,864     41,681.3  std::enable_if<!T7, void>::type internal::gemvx::kernel<int, int, __nv_bfloat16, __nv_bfloat16, __n…
+      0.3       13,303,102      6,204      2,144.3        896.0        832     76,096      6,934.2  triton_red_fused_2                                                                                  
+      0.2        9,612,640      6,096      1,576.9      1,504.0      1,120     13,888        440.8  void vllm::act_and_mul_kernel<c10::BFloat16, __nv_bfloat162, &vllm::silu_kernel<c10::BFloat16>, &vl…
+      0.2        7,876,832      6,204      1,269.6        768.0        704     47,264      2,792.4  triton_poi_fused__to_copy_permute_to_1                                                              
+      0.1        7,209,280        192     37,548.3     37,488.0     24,192     88,672      4,773.4  nvjet_sm121_tst_mma_64x104x64_4_16x104x64_tmaAB_alignCD4_bz_TNNN                                    
+      0.1        4,788,287      6,356        753.3        736.0        672      9,280        182.7  void at::native::vectorized_elementwise_kernel<(int)4, at::native::FillFunctor<int>, std::array<cha…
+      0.0        1,517,824        240      6,324.3      6,976.0      2,912     12,160      1,659.1  void vllm::moe::moe_align_block_size_kernel<int>(const T1 *, int *, int *, int *, int *, int, int, …
+      0.0        1,369,248        240      5,705.2      6,528.0      1,120     10,208      2,378.4  void vllm::moe::count_and_sort_expert_tokens_kernel<int>(const T1 *, int *, int *, int *, unsigned …
+      0.0        1,188,896        132      9,006.8      8,448.0      2,880     23,104      2,032.1  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIterator…
+      0.0          923,648        132      6,997.3      1,472.0      1,280    185,856     31,158.4  triton_poi_fused_2                                                                                  
+      0.0          878,240        132      6,653.3      6,560.0      5,632     16,480        880.2  void at::native::reduce_kernel<(int)512, (int)1, at::native::ReduceOp<float, at::native::ArgMaxOps<…
+      0.0          722,592        132      5,474.2      2,624.0      2,560     96,608     15,889.2  triton_red_fused__to_copy_add_mean_mul_pow_rsqrt_1                                                  
+      0.0          646,080        132      4,894.5      3,552.0      3,392     47,616      7,529.3  void vllm::rms_norm_per_block_quant_kernel<c10::BFloat16, c10::Float8_e4m3fn, (bool)0, (bool)1, (in…
+      0.0          643,968        132      4,878.5      1,728.0      1,664     92,928     14,103.1  triton_poi_fused__to_copy_embedding_0                                                               
+      0.0          608,256        264      2,304.0      2,096.0      1,248      9,856      1,576.5  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIterator…
+      0.0          350,688        133      2,636.8      2,400.0      1,376     10,464      1,055.8  void at::native::index_elementwise_kernel<(int)128, (int)4, void at::native::gpu_index_kernel<void …
+      0.0          293,792        132      2,225.7        928.0        864     49,952      7,196.9  triton_red_fused_1                                                                                  
+      0.0          261,568        132      1,981.6      1,888.0      1,856      3,904        340.1  _compute_slot_mapping_kernel                                                                        
+      0.0          257,664         48      5,368.0      4,912.0      4,224     10,368      1,129.8  nvjet_sm121_tst_mma_64x56x64_6_16x56x64_tmaAB_alignCD4_splitK_TNNN                                  
+      0.0          203,840        132      1,544.2      1,504.0      1,152      5,792        383.3  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIterator…
+      0.0          179,680        132      1,361.2      1,344.0      1,312      1,536         28.6  void at::native::vectorized_elementwise_kernel<(int)4, at::native::CUDAFunctor_add<int>, std::array…
+      0.0          167,296        128      1,307.0      1,152.0      1,088      5,312        472.1  void at::native::vectorized_gather_kernel<(int)16, long>(char *, char *, T2 *, int, long, long, lon…
+      0.0          143,072        132      1,083.9      1,024.0        992      1,632        111.0  void at::native::vectorized_elementwise_kernel<(int)2, at::native::CUDAFunctor_add<long>, std::arra…
+      0.0          131,808        132        998.5        992.0        960      1,248         36.0  void at::native::unrolled_elementwise_kernel<at::native::CUDAFunctorOnSelf_add<int>, std::array<cha…
+      0.0           80,960         48      1,686.7      1,632.0      1,536      3,392        270.2  void cublasLt::splitKreduce_kernel<(int)32, (int)16, int, float, __nv_bfloat16, float, __nv_bfloat1…
+      0.0           30,688          4      7,672.0      7,632.0      7,264      8,160        459.6  void at::native::index_elementwise_kernel<(int)128, (int)4, void at::native::gpu_index_kernel<void …
+      0.0            4,576          5        915.2        960.0        800      1,024        107.6  void at::native::unrolled_elementwise_kernel<at::native::FillFunctor<int>, std::array<char *, (unsi…
+      0.0            3,136          1      3,136.0      3,136.0      3,136      3,136          0.0  void at::native::_scatter_gather_elementwise_kernel<(int)128, (int)8, void at::native::_cuda_scatte…
+      0.0            3,040          4        760.0        768.0        736        768         16.0  void at::native::unrolled_elementwise_kernel<at::native::FillFunctor<long>, std::array<char *, (uns…
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/cuda_gpu_mem_time_sum.py]... 
+
+ ** CUDA GPU MemOps Summary (by Time) (cuda_gpu_mem_time_sum):
+
+ Time (%)  Total Time (ns)  Count  Avg (ns)  Med (ns)  Min (ns)  Max (ns)  StdDev (ns)            Operation           
+ --------  ---------------  -----  --------  --------  --------  --------  -----------  ------------------------------
+     85.1       10,620,956  6,727   1,578.9     768.0       704    47,424      4,601.8  [CUDA memcpy Device-to-Device]
+     11.0        1,370,944    931   1,472.5     736.0       192     6,816      1,393.7  [CUDA memcpy Host-to-Device]  
+      3.5          438,144    132   3,319.3   3,360.0       576     5,888        488.6  [CUDA memcpy Device-to-Host]  
+      0.5           56,832    132     430.5     400.0       192     3,872        350.0  [CUDA memset]                 
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/cuda_gpu_mem_size_sum.py]... 
+
+ ** CUDA GPU MemOps Summary (by Size) (cuda_gpu_mem_size_sum):
+
+ Total (MB)  Count  Avg (MB)  Med (MB)  Min (MB)  Max (MB)  StdDev (MB)            Operation           
+ ----------  -----  --------  --------  --------  --------  -----------  ------------------------------
+  1,716.372  6,727     0.255     0.016     0.000     8.389        1.394  [CUDA memcpy Device-to-Device]
+      2.423    931     0.003     0.000     0.000     0.016        0.006  [CUDA memcpy Host-to-Device]  
+      0.002    132     0.000     0.000     0.000     0.000        0.000  [CUDA memcpy Device-to-Host]  
+      0.002    132     0.000     0.000     0.000     0.000        0.000  [CUDA memset]                 
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/openmp_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain OpenMP event data.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/opengl_khr_range_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain KHR Extension (KHR_DEBUG) data.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/opengl_khr_gpu_range_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain GPU KHR Extension (KHR_DEBUG) data.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/vulkan_marker_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain Vulkan Debug Extension (Vulkan Debug Util) data.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/vulkan_gpu_marker_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain GPU Vulkan Debug Extension (GPU Vulkan Debug markers) data.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/dx11_pix_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain DX11 CPU debug markers.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/dx12_gpu_marker_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain DX12 GPU debug markers.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/dx12_pix_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain DX12 CPU debug markers.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/wddm_queue_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain WDDM context data.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/um_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain CUDA Unified Memory CPU page faults data.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/um_total_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain CUDA Unified Memory CPU page faults data.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/um_cpu_page_faults_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain CUDA Unified Memory CPU page faults data.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/openacc_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain OpenACC event data.
+
+Processing [nsys_reports/qwen3_fp8_v6.sqlite] with [/opt/nvidia/nsight-systems/2026.1.3/target-linux-sbsa-armv8/reports/syscall_sum.py]... 
+SKIPPED: nsys_reports/qwen3_fp8_v6.sqlite does not contain syscall data.
+
