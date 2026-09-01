@@ -71,7 +71,7 @@ if os.environ.get("VLLM_CUDA_PROFILER_STOP_AT_STEP"):
                     print(f"[nsys-patch] start failed: {e}", flush=True)
             result = _orig(self, *args, **kwargs)
             _s["n"] += 1
-            if _s["n"] == _stop and not _s["stopped"]:
+            if _s["n"] >= _stop and not _s["stopped"]:
                 _s["stopped"] = True
                 try:
                     torch.cuda.profiler.stop()

@@ -1,0 +1,30 @@
+[
+  {
+    "req_id": 0,
+    "ttft_s": 1.2758827489888063,
+    "tpot_ms": 36.99605833955307,
+    "completion_tokens": 1020,
+    "total_time_s": 38.97486619699339
+  },
+  {
+    "req_id": 1,
+    "ttft_s": 1.28802590999112,
+    "tpot_ms": 37.01104040432598,
+    "completion_tokens": 1020,
+    "total_time_s": 39.0022760819993
+  },
+  {
+    "req_id": 2,
+    "ttft_s": 1.287608642000123,
+    "tpot_ms": 37.01113453679556,
+    "completion_tokens": 1020,
+    "total_time_s": 39.0019547349948
+  },
+  {
+    "req_id": 3,
+    "ttft_s": 1.2872115829959512,
+    "tpot_ms": 37.01093848282596,
+    "completion_tokens": 1020,
+    "total_time_s": 39.001357896995614
+  }
+]

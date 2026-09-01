@@ -12,6 +12,8 @@ prefill/decode 阶段标签；收尾必须 `docker stop -t 180`。
 | qwen3_fp8_v5.nsys-rep (35MB, 全程) | 224,395 条；**尾部 ~0.8s（27 步）CUPTI 丢事件**，归因只用到 decode step116 | prefill ×4 / decode ×140 | 1513.5/30.51ms ≈ 干净基线 1515/29.15 |
 | qwen3_fp4_v5.nsys-rep (53MB, 全程) | 314,796 条，无尾部丢失（间歇性，需逐报告空步检测） | prefill ×4 / decode ×140 | 1227.5/19.74ms ≈ 干净基线 1223/19.47 |
 | **qwen3_fp8_v6.nsys-rep (11MB, 窗口)** | **140,947 条，负载段零丢失**：decode 129 步全部完整（1,072 kernel/步，busy 29.68ms ≈ 99.6% GPU busy） | prefill ×4 / decode ×129 | 1509.8/29.81ms ≈ 干净基线 |
+| **qwen3_fp8_v6_nc.nsys-rep (43MB, 窗口)** | **1,171,187 条，零空步**：对齐 graph+no-compile 基准（1K out），decode 1023 步全量，busy 37.78ms ≈ 周期 37.79ms ≈ 99.9% GPU busy | prefill ×4 + 混合步14 / decode ×1023 | 2268/47.52ms（TPOT 含 stop 触发后 finalize 抢 CPU 的流式尾部伪影，首轮未触发 stop 复测为 37.63ms） |
+| **qwen3_fp4_v6_nc.nsys-rep (46MB, 窗口)** | **1,251,219 条，零空步**：同上 1K out，busy 27.41ms ≈ 周期 27.45ms ≈ 99.9% | prefill ×4 + 混合步14 / decode ×1023 | 1285/37.01ms（同上，首轮复测 27.73ms ≈ 干净 26.76） |
 
 **v6 窗口模式**（逐 kernel 归因首选）：`V5_OUT=qwen3_fp8_v6
 VLLM_CUDA_PROFILER_START_AT_STEP=9 VLLM_CUDA_PROFILER_STOP_AT_STEP=145
@@ -21,6 +23,14 @@ bash run_verify_nsys.sh fp8`。早期“窗口模式 KERNEL 表缺失”的结�
 连空闲 10s + --cuda-flush-interval=1000 都无法归零，丢失锚定在最后一段 CUPTI
 活动而非停止时机）。判别方法：NVTX 仍在推进而 KERNEL/RUNTIME/MEMCPY 同时归零
 → CUPTI 停采，非 GPU 空闲。
+
+**STOP 陷阱（v6_nc 首轮教训）**：窗口 STOP 必须设在**必然在负载内触发**的步数。
+nc 报告（1K out，decode 1024 步）首采 STOP=1060 > 实际最后 execute_model 步 1039，
+bench 结束后引擎空闲不再调 execute_model，步计数器停在 1039，`cudaProfilerStop`
+永不触发 → 报告由 docker stop 收尾，尾部又丢 26 步（~1.0s）。修复：补丁 stop
+判断 `==` 改 `>=`（prof_patch/sitecustomize.py），重采 STOP=1037 后零空步。
+另外 stop 触发后 nsys finalization 与 bench 尾部并发会拖慢 SSE 流式发送，
+该轮客户端 TPOT 虚高不可引用，以服务端步周期为准。
 
 summary 导出：`nsys stats --force-export=true <rep> > <rep去掉后缀>_stats.txt`
 （产物 `qwen3_fp{8,4}_v5_stats.txt`，含 nvtx_sum / cuda_api_sum / cuda_gpu_kern_sum /

@@ -2,6 +2,7 @@
 """v3 nsys 采集方案验证客户端：warmup + batch4(8K入/128出)，触发 prefill 与 decode 两阶段。"""
 import asyncio
 import json
+import os
 import random
 import time
 
@@ -10,7 +11,7 @@ import aiohttp
 API_URL = "http://localhost:8000/v1/completions"
 MODEL_NAME = "qwen3-30b-a3b"
 INPUT_LEN = 8192
-OUTPUT_LEN = 128   # 缩短 decode，使 patch 的 STOP_AT_STEP=90 落在 decode 窗口内
+OUTPUT_LEN = int(os.environ.get("BENCH_OUTPUT_LEN", 128))   # nc 基准参数为 1024：BENCH_OUTPUT_LEN=1024
 BATCH_SIZE = 4
 
 
@@ -51,9 +52,10 @@ async def main():
         rs = await asyncio.gather(*(bench_one(s, i, build_token_ids(INPUT_LEN)) for i in range(BATCH_SIZE)))
         print(f"[bench] elapsed={time.perf_counter()-t0:.2f}s mean_ttft={sum(r['ttft_s'] for r in rs)/4*1000:.1f}ms "
               f"mean_tpot={sum(r['tpot_ms'] for r in rs)/4:.2f}ms", flush=True)
-    with open("/work/verify_bench_result.json", "w") as f:
+    out_path = os.environ.get("BENCH_OUT", "/work/verify_bench_result.json")
+    with open(out_path, "w") as f:
         json.dump(rs, f, indent=2)
-    print("saved /work/verify_bench_result.json", flush=True)
+    print(f"saved {out_path}", flush=True)
 
 
 asyncio.run(main())

@@ -344,6 +344,31 @@ median 19.72ms ≈ TPOT。两版 summary：`qwen3_fp{8,4}_v5_stats.txt`（`nsys 
   shutdown 伪步（tokens0）。**逐 kernel 归因优先用 v6**；v5 全程报告保留
   加载/Graph 捕获期全时间线（尾部 ~0.8s 负载段缺失，归因只用到 step116）。
 
+#### nc 窗口报告：对齐 graph+no-compile 基准（2026-09-01）
+
+- **对齐目标**：`bench_result_graph_nocompile.json` / `bench_result_nvfp4_graph_nocompile.json`
+  的参数（8K in / **1K out** / batch 4，`mode=NONE` + `FULL_DECODE_ONLY`），
+  脚本新增 `fp8nc`/`fp4nc` 变体，bench 用 `BENCH_OUTPUT_LEN=1024`。
+- **STOP 陷阱（重要教训）**：窗口 STOP 设 1060（> 实际最后 execute_model 步 1039），
+  bench 结束后引擎空闲不再调 execute_model，步计数器停在 1039，`cudaProfilerStop`
+  **永远不触发**（sqlite RUNTIME 表 0 次 cuProfilerStop），报告由 docker stop 收尾
+  → 尾部又丢 26 步（~1.0s），窗口模式同款丢失。修复：补丁 stop 判断 `==` 改 `>=`，
+  且 STOP 必须设在**必然在负载内触发**的步数（本次 1037 = 8 warmup + 5 prefill
+  + ~1024 decode 尾段）。
+- **修复后产物（零空步）**：`qwen3_fp8_v6_nc.nsys-rep`（43MB，1,171,187 条 kernel，
+  decode 1023 步全量，busy 37.78ms ≈ 周期 37.79ms ≈ 99.9% GPU busy）；
+  `qwen3_fp4_v6_nc.nsys-rep`（46MB，1,251,219 条 kernel，busy 27.41ms ≈ 周期
+  27.45ms ≈ 99.9%）。bench 复测 TTFT：FP8 2268/2285ms（干净 2313 ✓）、
+  FP4 1276/1285ms（干净 1196，+7% 为追踪开销）。
+- **nc 模式 kernel 特征**：`direct_copy` elementwise 拷贝占 13.5%（FP8）/17.8%（FP4），
+  而 compile 模式下几乎消失——torch.compile 融合收益的直接证据；
+  decode busy 对比：FP8 nc 37.78ms vs compile 29.68ms（+27%）、
+  FP4 nc 27.41ms vs compile 19.74ms（+39%）。
+- **客户端 TPOT 伪影**：stop 在 bench 尾段触发后 nsys 立即 finalization（处理
+  ~120 万事件），CPU 被占导致 SSE token 流尾部延迟 → 该轮 client TPOT 虚高
+  （47.52/37.01ms），引用首轮未触发 stop 的复测值（FP8 37.63ms / FP4 27.73ms）
+  或干净基线；服务端步周期（37.79/27.45ms）全程稳定不受影响。
+
 ## 5. OOM 防范规范（GB10 统一内存必读）
 
 统一内存下内存预算合并计算：**vLLM 预留 + profiler 峰值 + 系统 ≈ 121GB，不可超**。
@@ -370,11 +395,16 @@ KV cache 需求估算（FP8 KV）：batch 4 × (8K+1K) ≈ 36K tokens，在 0.70
 | `bench_result_nvfp4.json` | NVFP4 干净基准结果（graph+compile） |
 | `bench_result_nvfp4_graph_nocompile.json` | NVFP4 graph+no-compile 基准结果 |
 | `prof_patch/sitecustomize.py` | torch profiler 自动打点 + nsys cudaProfilerApi + NVTX 阶段标注补丁（PYTHONPATH 注入） |
-| `run_verify_nsys.sh` | nsys v5 采集方案启动脚本（用法 `bash run_verify_nsys.sh [fp8\|fp4]`，见 4.7 节） |
-| `verify_bench.py` | nsys 验证负载客户端（warmup + batch4 8K入/128出） |
+| `run_verify_nsys.sh` | nsys 采集方案启动脚本（用法 `bash run_verify_nsys.sh [fp8\|fp4\|fp8nc\|fp4nc]`，nc 变体对齐 graph+no-compile 基准，见 4.7 节） |
+| `verify_bench.py` | nsys 验证负载客户端（warmup + batch4 8K入；`BENCH_OUTPUT_LEN` 环境变量控制输出长度，默认 128） |
+| `bench_result_fp8_nc_profile.json` | FP8 nc 采集轮 bench 复测（1K out） |
+| `bench_result_fp4_nc_profile.json` | NVFP4 nc 采集轮 bench 复测（1K out） |
 | `nsys_reports/qwen3_fp8_v5.nsys-rep` | 已验证的 kernel+NVTX 全程报告 FP8（177,561 条 kernel，见 4.7 节） |
 | `nsys_reports/qwen3_fp4_v5.nsys-rep` | 已验证的 kernel+NVTX 全程报告 NVFP4（314,796 条 kernel，见 4.7 节） |
 | `nsys_reports/qwen3_fp{8,4}_v5_stats.txt` | `nsys stats` 导出的 summary（nvtx/cuda_api/kernel/memops） |
+| `nsys_reports/qwen3_fp8_v6_nc.nsys-rep` | FP8 graph+no-compile 窗口报告（1K out 全量，1,171,187 条 kernel，零空步） |
+| `nsys_reports/qwen3_fp4_v6_nc.nsys-rep` | NVFP4 graph+no-compile 窗口报告（1K out 全量，1,251,219 条 kernel，零空步） |
+| `nsys_reports/qwen3_fp{8,4}_v6_nc_stats.txt` | nc 报告的 `nsys stats` summary |
 | `prof_traces/*.pt.trace.json.gz` | chrome trace（FP8 / NVFP4 的 prefill+decode kernel 级数据，不入库，见 4.4 节 Release 下载链接） |
 | `prof_traces/qwen3_fp4_kernel_summary.txt` | NVFP4 eager trace kernel 汇总 |
 | `prof_traces/qwen3_fp8_nc_kernel_summary.txt` | FP8 graph+no-compile trace kernel 汇总 |
