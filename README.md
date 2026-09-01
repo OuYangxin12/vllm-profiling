@@ -294,6 +294,14 @@ docker run -d --privileged --gpus all --ipc=host --network host \
 在 GPU Metrics 泳道对比基准窗口内两个量化版本的带宽利用率；
 kernel 泳道为空属已知限制。详见 `nsys_reports/README.md`。
 
+**prefill/decode 分离采集**：在补丁内调 `torch.cuda.profiler.start/stop()`
+（cudaProfilerApi）配合 `--capture-range=cudaProfilerApi --capture-range-end=stop-shutdown`
+可精确截取窗口，需 `VLLM_ENABLE_V1_MULTIPROCESSING=0`（nsys 注入下 EngineCore
+子进程无法经 PYTHONPATH 加载补丁，单进程模式可绕开）。步进：预热 9 步后主
+prefill 为步 9-12，decode 从步 13 起（`VLLM_CUDA_PROFILER_START_AT_STEP` /
+`VLLM_CUDA_PROFILER_STOP_AT_STEP`）。产物：`qwen3_fp{8,4}_{prefill,decode}.nsys-rep`
+（prefill 窗口 1.1s ≈ 4 个 chunk，decode 窗口 7.8s ≈ 274 步 × 29ms，已验证）。
+
 注：`--privileged` 仅 GPU metrics 计数器需要；且 EngineCore 为独立子进程，
 其内部 CUDA 调用不会被 nsys 捕获（连 CUDA API 行也仅剩初始化阶段的几条）。
 

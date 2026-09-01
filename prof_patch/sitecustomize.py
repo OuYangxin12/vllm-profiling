@@ -48,6 +48,8 @@ if os.environ.get("VLLM_TORCH_PROFILER_DIR"):
 
 # ---- nsys cudaProfilerApi 模式：窗口内调 torch.cuda.profiler.start/stop ----
 # 配合 nsys profile --capture-range=cudaProfilerApi 使用，仅采集基准窗口
+# 可用 VLLM_CUDA_PROFILER_START_AT_STEP 控制起始步（默认 0，从第一个 execute_model 开始），
+# 例如预热 9 步（1 prefill + 8 decode）后：START=9/STOP=13 仅采 prefill，START=15 仅采 decode
 if os.environ.get("VLLM_CUDA_PROFILER_STOP_AT_STEP"):
 
     def _patch_nsys():
@@ -55,15 +57,16 @@ if os.environ.get("VLLM_CUDA_PROFILER_STOP_AT_STEP"):
         import vllm.v1.worker.gpu_worker as gw
 
         _stop = int(os.environ["VLLM_CUDA_PROFILER_STOP_AT_STEP"])
+        _start = int(os.environ.get("VLLM_CUDA_PROFILER_START_AT_STEP", "0"))
         _s = {"n": 0, "started": False, "stopped": False}
         _orig = gw.Worker.execute_model
 
         def patched(self, *args, **kwargs):
-            if not _s["started"]:
+            if not _s["started"] and _s["n"] >= _start:
                 _s["started"] = True
                 try:
                     torch.cuda.profiler.start()
-                    print("[nsys-patch] cudaProfilerStart", flush=True)
+                    print(f"[nsys-patch] cudaProfilerStart at step {_s['n']}", flush=True)
                 except Exception as e:  # noqa: BLE001
                     print(f"[nsys-patch] start failed: {e}", flush=True)
             result = _orig(self, *args, **kwargs)
