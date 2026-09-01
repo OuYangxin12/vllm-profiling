@@ -272,6 +272,31 @@ NVFP4 ≈ 27.8 ms/步（7.63s/274，GPU busy 99%）、FP8 ≈ 40.1 ms/步（10.9
 （NVFP4 decode 85%→99%）。profiling 会话中的客户端 TPOT（FP8 59ms / NVFP4 51ms）
 含 profiler 开销与导出阻塞，不作性能参考。
 
+### 4.7 nsys 原生报告（GPU metrics 时间线）
+
+虽然 kernel 数据不可采（4.1 节），但 **GPU metrics（SM 吞吐/显存带宽曲线）可以正常采集**。
+采集命令（简洁版，参考标准用法）：
+
+```bash
+docker run -d --privileged --gpus all --ipc=host --network host \
+  -v $(pwd)/models:/models -v $(pwd):/work -e HF_HOME=/models \
+  --entrypoint "" vllm-nsys:fp8 \
+  nsys profile --trace=cuda,osrt,nvtx --sample=none --cpuctxsw=none \
+    --gpu-metrics-devices=all --output=/work/nsys_reports/qwen3_fp8 \
+    --force-overwrite=true --stop-on-exit=true \
+  vllm serve /models/Qwen3-30B-A3B-FP8 --port 8000 --host 0.0.0.0 \
+    --gpu-memory-utilization 0.90 --max-model-len 16384 --trust-remote-code
+# 服务就绪后跑 bench_ttft_tpot.py，然后 docker stop 结束采集并落盘
+```
+
+产物：`nsys_reports/qwen3_fp8.nsys-rep`（47MB，5264 万条 GPU metrics）与
+`nsys_reports/qwen3_fp4.nsys-rep`（37MB，4052 万条）。用 `nsys-ui` 打开，
+在 GPU Metrics 泳道对比基准窗口内两个量化版本的带宽利用率；
+kernel 泳道为空属已知限制。详见 `nsys_reports/README.md`。
+
+注：`--privileged` 仅 GPU metrics 计数器需要；且 EngineCore 为独立子进程，
+其内部 CUDA 调用不会被 nsys 捕获（连 CUDA API 行也仅剩初始化阶段的几条）。
+
 ## 5. OOM 防范规范（GB10 统一内存必读）
 
 统一内存下内存预算合并计算：**vLLM 预留 + profiler 峰值 + 系统 ≈ 121GB，不可超**。

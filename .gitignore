@@ -5,6 +5,7 @@ models/
 prof_traces/*.pt.trace.json.gz
 prof_traces/*.pt.trace.json
 *.nsys-rep
+!nsys_reports/*.nsys-rep
 *.sqlite
 *.qdstrm
 
