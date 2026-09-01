@@ -131,19 +131,23 @@ curl localhost:8000/metrics | grep -E 'time_to_first_token|time_per_output_token
 
 ## 4. Prefill / Decode Profiling
 
-### 4.1 重要结论：nsys 在 GB10 上不可用于 kernel 采集
+### 4.1 重要结论（2026-09-01 修正）：kernel 采集失败是 nsys 版本回归，2025.3.2 可用
 
-在当前 GB10 + 驱动 580.82.09（open kernel module）环境下验证过：
+早期结论“nsys 在 GB10 上无法采集 kernel，属平台限制”**已被推翻**。v3~v5 三轮对照
+实验确认 **nsys 版本是决定性变量**：
 
-- nsys 2024.2.3（CUPTI 12.5）→ `CUPTI_ERROR_INVALID_DEVICE`（不支持 CUDA 13.2 驱动）
-- nsys 2025.3.2 / 2025.6.3 / 2026.1.3（CUPTI 13.1~13.3）→ CUDA API/Memcpy/Runtime 均可采集，
-  但 **kernel 活动记录始终为 0**，且无任何报错（含 `--trace=cuda-sw` 软件模式）
-- `NSYS_CUPTI_LIBRARY_PATH` 指向 CUDA 工具包自带的 CUPTI（`libcupti.so.2026.2.1`，
-  进程内直调可正常收到 kernel 记录）→ nsys 管线下依然采不到
-- 宿主机/容器、root/普通用户、`--privileged` 均排除
+| nsys 版本 | 环境 | kernel 结果 |
+|---|---|---|
+| **2025.3.2**（bind-mount 宿主机 `/opt/nvidia/nsight-systems/2025.3.2` 进容器） | vllm-nsys:fp8 容器内 | ✅ **177,561 条**，覆盖全程 229s |
+| 2025.6.3（镜像自带） | 同容器 | ❌ 0~417 条（仅启动期），静默无报错 |
+| 2026.1.3 | 宿主机 | ❌ 0 条 |
 
-结论：是 nsys 采集管线与 GB10（Blackwell iGPU 硬件追踪路径）的兼容性问题，**用 torch profiler
-（kineto，进程内 CUPTI）替代**，已验证可完整采集 kernel 数据。
+- 早期对 2025.3.2 的失败测试疑与 `--capture-range=cudaProfilerApi` 窗口模式有关：
+  v3 实测该模式下 RUNTIME/NVTX/memcpy 均正常但 **KERNEL 表缺失**（任何版本、容器内也
+  一样）；全程立即采集则 kernel 完整（v5 实测）。
+- 2025.6.x+ 存在 kernel 采集回归，2025.3.2 是当前唯一验证可用版本。
+- 结论：**容器内 + nsys 2025.3.2 + 全程采集**即可获得完整 kernel 数据，逐 kernel
+  归因不再强依赖 torch profiler（后者仍是算子级/注解级分析的补充）。
 
 ### 4.2 方案：torch profiler + sitecustomize 自动打点
 
@@ -272,38 +276,54 @@ NVFP4 ≈ 27.8 ms/步（7.63s/274，GPU busy 99%）、FP8 ≈ 40.1 ms/步（10.9
 （NVFP4 decode 85%→99%）。profiling 会话中的客户端 TPOT（FP8 59ms / NVFP4 51ms）
 含 profiler 开销与导出阻塞，不作性能参考。
 
-### 4.7 nsys 原生报告（GPU metrics 时间线）
+### 4.7 nsys 原生报告（kernel + GPU metrics 时间线）
 
-虽然 kernel 数据不可采（4.1 节），但 **GPU metrics（SM 吞吐/显存带宽曲线）可以正常采集**。
-采集命令（简洁版，参考标准用法）：
+**GPU metrics（SM 吞吐/显存带宽曲线）**与 **kernel 逐条记录**（正确版本 + 全程采集）
+均可采集。推荐方案（v5，已验证，即 `run_verify_nsys.sh`）：
 
 ```bash
-docker run -d --privileged --gpus all --ipc=host --network host \
-  -v $(pwd)/models:/models -v $(pwd):/work -e HF_HOME=/models \
+docker run -d --name vllm-fp8-nsys-v3 --privileged --gpus all --ipc=host \
+  --network host --ulimit memlock=-1 --ulimit stack=67108864 \
+  -v $(pwd):/work -v $(pwd)/models:/models \
+  -v /opt/nvidia/nsight-systems/2025.3.2:/opt/nvidia/nsight-systems/2025.3.2:ro \
+  -e PYTHONPATH=/work/prof_patch -e VLLM_NVTX_LABEL=1 \
   --entrypoint "" vllm-nsys:fp8 \
-  nsys profile --trace=cuda,osrt,nvtx --sample=none --cpuctxsw=none \
-    --gpu-metrics-devices=all --output=/work/nsys_reports/qwen3_fp8 \
-    --force-overwrite=true --stop-on-exit=true \
-  vllm serve /models/Qwen3-30B-A3B-FP8 --port 8000 --host 0.0.0.0 \
-    --gpu-memory-utilization 0.90 --max-model-len 16384 --trust-remote-code
-# 服务就绪后跑 bench_ttft_tpot.py，然后 docker stop 结束采集并落盘
+  /opt/nvidia/nsight-systems/2025.3.2/bin/nsys profile \
+    -o /work/nsys_reports/qwen3_fp8_v5 --force-overwrite=true \
+    -t cuda,nvtx,osrt --sample=none --cpuctxsw=none \
+    --cuda-graph-trace=node \
+  python3 -m vllm.entrypoints.openai.api_server \
+    --model /models/Qwen3-30B-A3B-FP8 --served-model-name qwen3-30b-a3b \
+    --tensor-parallel-size 1 --max-model-len 16384 \
+    --gpu-memory-utilization 0.85 --trust-remote-code --host 0.0.0.0 --port 8000
+# 就绪后（health 200）：docker exec vllm-fp8-nsys-v3 python3 /work/verify_bench.py
+# 收尾：docker stop -t 180 vllm-fp8-nsys-v3
 ```
 
-产物：`nsys_reports/qwen3_fp8.nsys-rep`（47MB，5264 万条 GPU metrics）与
-`nsys_reports/qwen3_fp4.nsys-rep`（37MB，4052 万条）。用 `nsys-ui` 打开，
-在 GPU Metrics 泳道对比基准窗口内两个量化版本的带宽利用率；
-kernel 泳道为空属已知限制。详见 `nsys_reports/README.md`。
+要点：
+- **必须 bind-mount 2025.3.2 并显式调用**，镜像自带的 2025.6.3 采不到 kernel（4.1 节）；
+- **不要用 `--capture-range=cudaProfilerApi` 窗口模式**（KERNEL 表缺失），改全程采集，
+  prefill/decode 切分靠 NVTX 标签后处理；
+- `--cuda-graph-trace=node` 把 decode CUDA Graph 展开为逐 kernel 记录；
+- NVTX 标签（`prefill_stepN_tokensN` / `decode_stepN_tokensN`）由 prof_patch 补丁产生；
+  导出 sqlite 后文本**内联在 `NVTX_EVENTS.text` 列**（不经 StringIds join）；
+- decode 走 CUDA Graph 时 NVTX 区间时长只含 CPU launch（~7ms），**步耗时用相邻区间
+  start 差值**（实测平均 30.39ms，与客户端 TPOT 29.78ms 吻合）；
+- **收尾必须 `docker stop -t 180`**：默认 10s 超时 SIGKILL 会丢失报告（v4 教训）。
 
-**prefill/decode 分离采集**：在补丁内调 `torch.cuda.profiler.start/stop()`
-（cudaProfilerApi）配合 `--capture-range=cudaProfilerApi --capture-range-end=stop-shutdown`
-可精确截取窗口，需 `VLLM_ENABLE_V1_MULTIPROCESSING=0`（nsys 注入下 EngineCore
-子进程无法经 PYTHONPATH 加载补丁，单进程模式可绕开）。步进：预热 9 步后主
-prefill 为步 9-12，decode 从步 13 起（`VLLM_CUDA_PROFILER_START_AT_STEP` /
-`VLLM_CUDA_PROFILER_STOP_AT_STEP`）。产物：`qwen3_fp{8,4}_{prefill,decode}.nsys-rep`
-（prefill 窗口 1.1s ≈ 4 个 chunk，decode 窗口 7.8s ≈ 274 步 × 29ms，已验证）。
+产物：`nsys_reports/qwen3_fp8_v5.nsys-rep`（32MB）：**177,561 条 kernel** 覆盖 229s 全程
+（Top：`fused_moe_kernel` 3088ms、`cutlass_3x_gemm_fp8_blockwise`、`flash_fwd_splitkv`、
+`act_and_mul`），NVTX prefill ×4（共 966ms）/ decode ×140。验证负载
+`verify_bench.py`（warmup 64/8 + batch4 8K入/128出）TTFT 1509ms / TPOT 29.78ms，
+与无 profiler 干净跑分（1515/29.15ms）一致，profiling 开销可忽略。
 
-注：`--privileged` 仅 GPU metrics 计数器需要；且 EngineCore 为独立子进程，
-其内部 CUDA 调用不会被 nsys 捕获（连 CUDA API 行也仅剩初始化阶段的几条）。
+早期报告（`qwen3_fp8.nsys-rep`/`qwen3_fp4.nsys-rep`，47MB/37MB，5264 万/4052 万条
+GPU metrics）仅 GPU metrics 可用（当时镜像为 2025.6.3，kernel 泳道为空属版本回归，
+非平台限制）；采集时若需 GPU metrics 加 `--gpu-metrics-devices=all`
+（需 `--privileged`，且同一 GPU 上不能与其他 nsys GPU-metrics 会话并发）。
+
+> 分窗口采集（`qwen3_fp{8,4}_{prefill,decode}.nsys-rep`）仅剩 GPU metrics 时间窗
+> 的价值，KERNEL 表在该模式下缺失，不再推荐用于 kernel 归因。
 
 ## 5. OOM 防范规范（GB10 统一内存必读）
 
@@ -330,7 +350,11 @@ KV cache 需求估算（FP8 KV）：batch 4 × (8K+1K) ≈ 36K tokens，在 0.70
 | `bench_result_graph_nocompile.json` | FP8 graph+no-compile 基准结果 |
 | `bench_result_nvfp4.json` | NVFP4 干净基准结果（graph+compile） |
 | `bench_result_nvfp4_graph_nocompile.json` | NVFP4 graph+no-compile 基准结果 |
-| `prof_patch/sitecustomize.py` | torch profiler 自动打点补丁（PYTHONPATH 注入） |
+| `prof_patch/sitecustomize.py` | torch profiler 自动打点 + nsys cudaProfilerApi + NVTX 阶段标注补丁（PYTHONPATH 注入） |
+| `run_verify_nsys.sh` | nsys v5 采集方案启动脚本（2025.3.2 注入 + NVTX 标签 + graph 展开，见 4.7 节） |
+| `verify_bench.py` | nsys 验证负载客户端（warmup + batch4 8K入/128出） |
+| `nsys_reports/qwen3_fp8_v5.nsys-rep` | 已验证的 kernel+NVTX 全程报告（177,561 条 kernel，见 4.7 节） |
+| `nsys_reports/*.nsys-rep` | 其余历史报告（GPU metrics 曲线 / 分窗口，见 `nsys_reports/README.md`） |
 | `prof_traces/*.pt.trace.json.gz` | chrome trace（FP8 / NVFP4 的 prefill+decode kernel 级数据，不入库，见 4.4 节 Release 下载链接） |
 | `prof_traces/qwen3_fp4_kernel_summary.txt` | NVFP4 eager trace kernel 汇总 |
 | `prof_traces/qwen3_fp8_nc_kernel_summary.txt` | FP8 graph+no-compile trace kernel 汇总 |

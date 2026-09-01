@@ -87,3 +87,39 @@ if os.environ.get("VLLM_CUDA_PROFILER_STOP_AT_STEP"):
         _patch_nsys()
     except Exception as e:  # noqa: BLE001
         print(f"[nsys-patch] patch error: {e}", flush=True)
+
+# ---- NVTX 阶段标注模式：每个 execute_model 步包一层 NVTX range ----
+# 一次全程采集即可在 nsys timeline 的 NVTX 泳道精确区分 prefill/decode，
+# 阶段判定：num_scheduled_tokens >= 512 视为 prefill chunk，否则 decode step
+# 仅在设置 VLLM_NVTX_LABEL=1 时生效（建议配合 VLLM_ENABLE_V1_MULTIPROCESSING=0）
+if os.environ.get("VLLM_NVTX_LABEL"):
+
+    def _patch_nvtx():
+        import torch
+        import vllm.v1.worker.gpu_worker as gw
+
+        _s = {"n": 0}
+        _orig = gw.Worker.execute_model
+
+        def patched(self, *args, **kwargs):
+            req = args[0] if args else kwargs.get("scheduler_output")
+            ntok = getattr(req, "total_num_scheduled_tokens", None)
+            if ntok is None:
+                per = getattr(req, "num_scheduled_tokens", None)
+                if isinstance(per, dict):
+                    ntok = sum(per.values())
+            phase = "prefill" if (ntok or 0) >= 512 else "decode"
+            torch.cuda.nvtx.range_push(f"{phase}_step{_s['n']}_tokens{ntok}")
+            try:
+                return _orig(self, *args, **kwargs)
+            finally:
+                torch.cuda.nvtx.range_pop()
+                _s["n"] += 1
+
+        gw.Worker.execute_model = patched
+        print("[nvtx-patch] execute_model nvtx-labeled", flush=True)
+
+    try:
+        _patch_nvtx()
+    except Exception as e:  # noqa: BLE001
+        print(f"[nvtx-patch] patch error: {e}", flush=True)
