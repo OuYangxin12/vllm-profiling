@@ -317,13 +317,15 @@ docker run -d --name vllm-fp8-nsys-v3 --privileged --gpus all --ipc=host \
 `verify_bench.py`（warmup 64/8 + batch4 8K入/128出）TTFT 1509ms / TPOT 29.78ms，
 与无 profiler 干净跑分（1515/29.15ms）一致，profiling 开销可忽略。
 
-早期报告（`qwen3_fp8.nsys-rep`/`qwen3_fp4.nsys-rep`，47MB/37MB，5264 万/4052 万条
-GPU metrics）仅 GPU metrics 可用（当时镜像为 2025.6.3，kernel 泳道为空属版本回归，
-非平台限制）；采集时若需 GPU metrics 加 `--gpu-metrics-devices=all`
-（需 `--privileged`，且同一 GPU 上不能与其他 nsys GPU-metrics 会话并发）。
+NVFP4 同方案产物：`nsys_reports/qwen3_fp4_v5.nsys-rep`（53MB，**314,796 条 kernel**），
+MoE 已切换为 TRT-LLM/CUTLASS FP4 分组 GEMM（约 35% GPU 时间）+ `flashinfer::BatchPrefill`；
+基准 TTFT 1227.5ms / TPOT 19.74ms（干净基线 1223/19.47），稳态 decode 步周期
+median 19.72ms ≈ TPOT。两版 summary：`qwen3_fp{8,4}_v5_stats.txt`（`nsys stats` 输出）。
 
-> 分窗口采集（`qwen3_fp{8,4}_{prefill,decode}.nsys-rep`）仅剩 GPU metrics 时间窗
-> 的价值，KERNEL 表在该模式下缺失，不再推荐用于 kernel 归因。
+早期缺 kernel 的报告（2025.6.3 所采的 `qwen3_fp8/fp4.nsys-rep` 全程报告与
+`qwen3_fp{8,4}_{prefill,decode}.nsys-rep` 分窗口报告）已删除；如需 GPU metrics
+曲线，采集时加 `--gpu-metrics-devices=all`（需 `--privileged`，且同一 GPU 上
+不能与其他 nsys GPU-metrics 会话并发）。
 
 ## 5. OOM 防范规范（GB10 统一内存必读）
 
@@ -351,10 +353,11 @@ KV cache 需求估算（FP8 KV）：batch 4 × (8K+1K) ≈ 36K tokens，在 0.70
 | `bench_result_nvfp4.json` | NVFP4 干净基准结果（graph+compile） |
 | `bench_result_nvfp4_graph_nocompile.json` | NVFP4 graph+no-compile 基准结果 |
 | `prof_patch/sitecustomize.py` | torch profiler 自动打点 + nsys cudaProfilerApi + NVTX 阶段标注补丁（PYTHONPATH 注入） |
-| `run_verify_nsys.sh` | nsys v5 采集方案启动脚本（2025.3.2 注入 + NVTX 标签 + graph 展开，见 4.7 节） |
+| `run_verify_nsys.sh` | nsys v5 采集方案启动脚本（用法 `bash run_verify_nsys.sh [fp8\|fp4]`，见 4.7 节） |
 | `verify_bench.py` | nsys 验证负载客户端（warmup + batch4 8K入/128出） |
-| `nsys_reports/qwen3_fp8_v5.nsys-rep` | 已验证的 kernel+NVTX 全程报告（177,561 条 kernel，见 4.7 节） |
-| `nsys_reports/*.nsys-rep` | 其余历史报告（GPU metrics 曲线 / 分窗口，见 `nsys_reports/README.md`） |
+| `nsys_reports/qwen3_fp8_v5.nsys-rep` | 已验证的 kernel+NVTX 全程报告 FP8（177,561 条 kernel，见 4.7 节） |
+| `nsys_reports/qwen3_fp4_v5.nsys-rep` | 已验证的 kernel+NVTX 全程报告 NVFP4（314,796 条 kernel，见 4.7 节） |
+| `nsys_reports/qwen3_fp{8,4}_v5_stats.txt` | `nsys stats` 导出的 summary（nvtx/cuda_api/kernel/memops） |
 | `prof_traces/*.pt.trace.json.gz` | chrome trace（FP8 / NVFP4 的 prefill+decode kernel 级数据，不入库，见 4.4 节 Release 下载链接） |
 | `prof_traces/qwen3_fp4_kernel_summary.txt` | NVFP4 eager trace kernel 汇总 |
 | `prof_traces/qwen3_fp8_nc_kernel_summary.txt` | FP8 graph+no-compile trace kernel 汇总 |
