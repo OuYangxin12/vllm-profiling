@@ -1,373 +1,231 @@
-# Qwen3-30B-A3B FP8 推理测试与 Profiling 方案
+# Qwen3-30B-A3B 推理基准测试与 Profiling 方案
 
-在 NVIDIA GB10（DGX Spark，121GB 统一内存）上，使用 Docker + vLLM 对 Qwen3-30B-A3B-FP8 模型进行
-TTFT / TPOT 基准测试，并采集 prefill / decode 两阶段的 kernel 级 profiling 数据。
+在 NVIDIA GB10（DGX Spark，121GB 统一内存）上，使用 Docker + vLLM（0.20.1）对
+Qwen3-30B-A3B-FP8 / NVFP4 模型进行 TTFT / TPOT 基准测试，并采集 prefill / decode
+两阶段的 kernel 级 profiling 数据。
 
 对应 task.txt 测试项：`input: 8K, output: 1K, batch size: 4, task: TTFT, TPOT; profiling data of prefill and decode`
+
+> 采集过程中踩过的坑（nsys 版本回归、CUPTI 尾部丢事件、profiler stop 陷阱等）的
+> 完整记录见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)，本文档只写最终验证过的做法。
 
 ## 1. 环境与组件
 
 | 组件 | 版本/说明 |
 |---|---|
 | 硬件 | NVIDIA GB10（DGX Spark），121GB 统一内存（CPU/GPU 共享） |
-| 模型 | `models/Qwen3-30B-A3B-FP8`（FP8 量化，7 个分片共 31GB） |
-| 推理框架 | vLLM 0.20.1（镜像 `nvcr.io/nvidia/vllm:26.05-py3`，定制镜像 `vllm-nsys:fp8`） |
+| 模型 | `models/Qwen3-30B-A3B-FP8`（31GB）/ `models/Qwen3-30B-A3B-NVFP4`（ModelOpt 官方 NVFP4） |
+| 推理框架 | vLLM 0.20.1（基础镜像 `nvcr.io/nvidia/vllm:26.05-py3`，定制镜像 `vllm-nsys:fp8`） |
 | 服务端口 | 8000（OpenAI 兼容 API） |
 | GPU/TP | TP=1（单卡） |
 
-> **统一内存注意**：GB10 的 CPU 和 GPU 共享同一 121GB 内存池，所有内存预算必须合并计算
-> （详见第 5 节 OOM 防范）。
+> **统一内存注意**：GB10 的 CPU 和 GPU 共享同一 121GB 内存池，所有内存预算必须合并
+> 计算（详见第 5 节 OOM 防范）。
 
-## 2. 启动推理服务
+## 2. TTFT / TPOT 基准测试
 
 ```bash
-# 常规基准测试（CUDA Graph 开启，性能最优）
-TP_SIZE=1 bash start_vllm.sh
+TP_SIZE=1 bash start_vllm.sh          # 常规基准服务（CUDA Graph + compile，性能最优）
+python3 bench_ttft_tpot.py            # 容器内运行：docker exec vllm-prof python3 /root/bench_ttft_tpot.py
 ```
 
-Profiling 用启动命令（eager 模式 + torch profiler 配置，见第 4 节）：
+数据获取要点：
+
+- 输入：`/v1/completions` 的 `prompt` 字段直接传 **token id 数组**，保证输入精确
+  8192 tokens（文本 prompt 经 tokenizer 往返会有 ~4% 长度漂移）；
+- 输出：`max_tokens=1024` + `ignore_eos=true`，强制生成满 1K，避免 EOS 截断影响 TPOT；
+- 并发：`asyncio.gather` 同时发出 4 个流式请求（batch size=4）；
+- 计时：TTFT = 首 token 时刻 − 请求发出时刻；TPOT =（末 token − 首 token）/(输出数−1)；
+- 运行前先用只生成 8 token 的小请求预热，排除 CUDA Graph / cache 冷启动影响。
+
+### 基准结果（8K in / 1K out / batch 4）
+
+| 模式 | FP8（TTFT/TPOT ms） | NVFP4（TTFT/TPOT ms） | 启动参数 |
+|---|---|---|---|
+| **graph + compile（默认）** | **1515 / 29.15** | **1223 / 19.47** | `start_vllm.sh` 默认 |
+| graph + no-compile | 2313 / 34.25 | 1196 / 26.76 | `--compilation-config '{"mode": "NONE", "cudagraph_mode": "FULL_DECODE_ONLY"}'` |
+| eager（`--enforce-eager`） | ~2156 / ~34.15 | —（decode 30.8ms/步） | `--enforce-eager` |
+
+结果文件：`bench_result.json`、`bench_result_graph_nocompile.json`（FP8）；
+`bench_result_nvfp4.json`、`bench_result_nvfp4_graph_nocompile.json`（NVFP4）。
+
+结论：
+
+- **FP8**：收益几乎全部来自 torch.compile 融合（TPOT −15%、TTFT −35%），
+  CUDA Graph 单独启用对 decode 几乎无增益；
+- **NVFP4**：compile 依然显著（TPOT −27%）；graph 单独启用相对 eager decode
+  有 ~4ms 收益（消除 launch 开销，GPU busy 85%→99%）；
+- **NVFP4 vs FP8（默认模式）**：TTFT −19%、TPOT −33%、每请求吞吐 +48%。
+
+其他获取途径：
 
 ```bash
-docker run -d \
-  --name vllm-prof \
+# vLLM 官方基准（服务端统计，含分位数）
+docker exec <容器> vllm bench serve --backend openai \
+  --host localhost --port 8000 --model qwen3-30b-a3b \
+  --dataset-name random --random-input-len 8192 --random-output-len 1024 \
+  --num-prompts 4 --request-rate inf --percentile-metrics ttft,tpot,itl
+# Prometheus 指标（服务端直方图）
+curl localhost:8000/metrics | grep -E 'time_to_first_token|time_per_output_token'
+```
+
+## 3. nsys Profiling（推荐方案，kernel 级）
+
+由 `run_verify_nsys.sh` 一键完成：容器内 bind-mount 宿主机 **nsys 2025.3.2**、
+窗口模式采集（cudaProfilerApi）、`--cuda-graph-trace=node` 展开 decode CUDA Graph、
+NVTX 打 prefill/decode 阶段标签。
+
+### 3.1 快速使用
+
+```bash
+# 1. 启动采集容器（窗口模式：START=9 跳过 8 步 warmup，STOP 设在负载尾段内）
+V5_OUT=qwen3_fp8_v6 VLLM_CUDA_PROFILER_START_AT_STEP=9 VLLM_CUDA_PROFILER_STOP_AT_STEP=145 \
+  bash run_verify_nsys.sh fp8        # 可选 fp8 | fp4 | fp8nc | fp4nc
+
+# 2. 等待 /health 返回 200（约 3~4 分钟）后跑验证负载
+docker exec vllm-nsys-fp8 env BENCH_OUTPUT_LEN=1024 python3 /work/verify_bench.py
+
+# 3. 收尾（必须 -t 180，否则 nsys 来不及写报告）
+docker stop -t 180 vllm-nsys-fp8
+
+# 4. 导出 summary（各表合并为一个 txt）
+nsys stats --force-export=true --report nvtx_sum,cuda_api_sum,cuda_gpu_kern_sum,cuda_gpu_mem_time_sum \
+  --format table --output <前缀> <rep 路径>   # 再 cat 各分表为 <前缀>_stats.txt
+```
+
+### 3.2 参数说明
+
+| 参数 | 说明 |
+|---|---|
+| 位置参数 `fp8 / fp4` | 量化版本，默认 graph+compile 模式，输出名 `qwen3_fp{8,4}_v5` |
+| 位置参数 `fp8nc / fp4nc` | 对齐 graph+no-compile 基准（`mode=NONE` + `FULL_DECODE_ONLY`），输出名 `qwen3_fp{8,4}_v6_nc` |
+| `V5_OUT=<名字>` | 覆盖报告输出名 |
+| `VLLM_CUDA_PROFILER_START_AT_STEP` | 窗口起点（execute_model 全局步计数）；**设 8 以上跳过 warmup** |
+| `VLLM_CUDA_PROFILER_STOP_AT_STEP` | 窗口终点，**必须设在负载内必然触发的步数**（见 3.3） |
+| `BENCH_OUTPUT_LEN`（verify_bench.py） | 输出 token 数，默认 128；对齐 1K out 基准用 1024 |
+
+### 3.3 正确做法要点（每条都验证过）
+
+1. **nsys 必须用 2025.3.2**（脚本已 bind-mount `/opt/nvidia/nsight-systems/2025.3.2`）：
+   2025.6.x+ 存在 kernel 采集回归，静默失败不报错；
+2. **用窗口模式**（设 START/STOP 后自动加 `--capture-range=cudaProfilerApi`）：
+   cudaProfilerStop 触发 buffer 强制 flush，可避免全程采集的 CUPTI 尾部丢事件，
+   且报告体积小一个量级；
+3. **STOP 宁小勿大**：步数 = 8（warmup）+ ~5（prefill chunk+混合步）+ 输出 token 数
+   再减 2~5 步余量。STOP 一旦超过实际最后一步，引擎空闲后不再调 execute_model，
+   cudaProfilerStop 永不触发，报告退化为 docker stop 收尾（尾部丢数据）；
+   例：128 out → STOP=145；1024 out → STOP=1037；
+4. **收尾必须 `docker stop -t 180`**：默认 10s 超时 SIGKILL 会丢失报告；
+5. **每次报告先做空步检测再用**：导出 sqlite 后核对每个 decode 步的 kernel 数，
+   零 kernel 步（除 warmup 首 chunk 和 stop 后 tokens0 伪步外）即 CUPTI 停采；
+6. **sqlite 分析要点**：NVTX 文本内联在 `NVTX_EVENTS.text` 列（有 NULL，查询加
+   `COALESCE(text,'')`，不经 StringIds join）；decode 步耗时用相邻 NVTX 区间
+   start 差值取 median（剔除 >100ms 间隙），区间时长本身只含 CPU launch ~3-7ms；
+   GPU busy 用 [步 start, 下一步 start) 窗口内 kernel 时长之和；
+7. **混合步识别**：prefill chunk 与 decode 混调的步会被 512-token 阈值误标成
+   `decode_stepN`（特征：scheduled tokens < 512 但 ~1000+ kernel、数百 ms busy），
+   判相别以 kernel 数/busy 为准，不要只看标签。
+
+### 3.4 产物与结果
+
+| 报告（nsys_reports/） | 模式 | 内容 |
+|---|---|---|
+| `qwen3_fp8_v5.nsys-rep` + `_stats.txt` | 全程采集 | 224,395 条 kernel，覆盖加载/Graph 捕获/负载全时间线；尾部 ~0.8s 缺失，归因只用到 decode step116 |
+| `qwen3_fp4_v5.nsys-rep` + `_stats.txt` | 全程采集 | 314,796 条 kernel，负载段完整 |
+| `qwen3_fp8_v6.nsys-rep` + `_stats.txt` | 窗口（128 out） | 140,947 条 kernel，零丢失；decode 129 步、1,072 kernel/步、busy 29.68ms ≈ 周期 29.80ms（99.6% GPU busy） |
+| `qwen3_fp8_v6_nc.nsys-rep` + `_stats.txt` | 窗口（1024 out，nc） | 1,171,187 条 kernel，零空步；decode 1023 步、busy 37.78ms ≈ 周期 37.79ms（99.9%） |
+| `qwen3_fp4_v6_nc.nsys-rep` + `_stats.txt` | 窗口（1024 out，nc） | 1,251,219 条 kernel，零空步；busy 27.41ms ≈ 周期 27.45ms（99.9%） |
+
+窗口报告对应的 bench 复测（TTFT/TPOT）：FP8 compile 1509.8/29.81ms、
+FP8 nc 2268/37.63ms、FP4 nc 1276/27.73ms，均与干净基线吻合（profiling 开销可忽略）。
+
+kernel 归因结论（compile 模式，`fused_moe_kernel` 38%+、`flash attention` ~21%、
+`cutlass fp8/fp4 GEMM` ~11-23% 为主；NVFP4 的 MoE 切换为 TRT-LLM/CUTLASS FP4 分组
+GEMM + `flashinfer::BatchPrefill`）；**no-compile 模式的标志是 `direct_copy`
+elementwise 拷贝占 13.5%（FP8）/ 17.8%（FP4）GPU 时间**——torch.compile 融合收益
+的直接证据；nc vs compile 的 decode busy 差：FP8 37.78 vs 29.68ms（+27%）、
+FP4 27.41 vs 19.74ms（+39%）。
+
+如需 GPU metrics 曲线（SM 吞吐/显存带宽），采集时加 `--gpu-metrics-devices=all`
+（需 `--privileged`，且同一 GPU 上不能与其他 nsys GPU-metrics 会话并发）。
+
+打开方式：`nsys-ui nsys_reports/<报告>`（宿主机 2026.1.3 可查看 2025.3.2 采集的报告），
+重点看 CUDA HW kernel 泳道与 NVTX 泳道；报告背景与逐报告说明见
+`nsys_reports/README.md`。
+
+## 4. torch profiler 补充方案（算子级 trace）
+
+nsys 覆盖不到的算子级/注解级分析可用 torch profiler。该 vLLM 构建没有 HTTP
+profiler 端点，通过 `PYTHONPATH` 注入 `prof_patch/sitecustomize.py`，monkey-patch
+`Worker.execute_model`：第 1 步自动启动 profiler，第 `VLLM_PROF_STOP_AT_STEP` 步
+停止并导出 chrome trace。
+
+关键启动参数：
+
+```
+--enforce-eager                                          # eager 模式采集；nc 模式换 --compilation-config
+--profiler-config.profiler=torch
+--profiler-config.torch_profiler_dir=/models/prof_traces # trace 输出目录
+--profiler-config.torch_profiler_with_stack=false        # 关闭调用栈（内存大户，防 OOM）
+-e VLLM_PROF_STOP_AT_STEP=280                            # 采集窗口（全局步计数，warmup 也占步）
+-e VLLM_PROF_PREFIX=qwen3_fp8                            # trace 文件名前缀
+```
+
+窗口估算：280 步 ≈ prefill(4~8 chunk) + ~270 decode 步；预热请求只生成 8 token，
+避免消耗窗口。FULL_DECODE_ONLY 模式下 CUDA Graph 内的 decode kernel 也能被
+kineto（CUPTI graph trace）逐条记录，但 `execute_context_N` 注解时间片不可靠，
+每步耗时用 **GPU busy 总量 / 步数**。
+
+完整 docker run 命令：
+
+```bash
+docker run -d --name vllm-prof \
   --gpus all --ipc=host \
   --ulimit memlock=-1 --ulimit stack=67108864 \
   --network host \
-  -v $(pwd)/models:/models \
-  -v $(pwd)/prof_patch:/models/prof_patch \
+  -v $(pwd)/models:/models -v $(pwd)/prof_patch:/models/prof_patch \
   -v $(pwd)/prof_traces:/models/prof_traces \
-  -e HF_HOME=/models \
-  -e PYTHONPATH=/models/prof_patch \
+  -e HF_HOME=/models -e PYTHONPATH=/models/prof_patch \
   -e VLLM_TORCH_PROFILER_DIR=/models/prof_traces \
-  -e VLLM_PROF_STOP_AT_STEP=280 \
-  -e VLLM_PROF_PREFIX=qwen3_fp8 \
-  --entrypoint python3 \
-  vllm-nsys:fp8 \
+  -e VLLM_PROF_STOP_AT_STEP=280 -e VLLM_PROF_PREFIX=qwen3_fp8 \
+  --entrypoint python3 vllm-nsys:fp8 \
   -m vllm.entrypoints.openai.api_server \
-  --model /models/Qwen3-30B-A3B-FP8 \
-  --served-model-name qwen3-30b-a3b \
-  --tensor-parallel-size 1 \
-  --max-model-len 16384 \
-  --gpu-memory-utilization 0.70 \
-  --trust-remote-code \
-  --enforce-eager \
+  --model /models/Qwen3-30B-A3B-FP8 --served-model-name qwen3-30b-a3b \
+  --tensor-parallel-size 1 --max-model-len 16384 \
+  --gpu-memory-utilization 0.70 --trust-remote-code \
   --profiler-config.profiler=torch \
   --profiler-config.torch_profiler_dir=/models/prof_traces \
   --profiler-config.torch_profiler_with_stack=false \
   --host 0.0.0.0 --port 8000
 ```
 
-## 3. TTFT / TPOT 基准测试
+### 4.1 trace 分析结果（8K in / 1K out / batch 4）
 
-脚本：`bench_ttft_tpot.py`（容器内运行，`docker exec vllm-prof python3 /root/bench_ttft_tpot.py`）
+分析脚本：`python3 analyze_trace.py prof_traces/<trace>.pt.trace.json.gz`。
+trace 体积大（23~121MB）不入库，从 GitHub Release 下载：
+<https://github.com/OuYangxin12/vllm-profiling/releases/tag/artifacts>
+（新增上传：`gh release upload artifacts <trace> --clobber`）。
+查看：chrome://tracing 或 <https://ui.perfetto.dev>。
 
-### 数据获取原理
+**FP8**（eager / nc 的 kernel 构成基本一致，FULL_DECODE_ONLY 只消除 CPU launch 开销）：
 
-- 输入：`/v1/completions` 的 `prompt` 字段直接传 **token id 数组**，保证输入长度精确为 8192 tokens
-  （文本 prompt 经 tokenizer 往返会有 4% 左右的长度漂移）。
-- 输出：`max_tokens=1024` + `ignore_eos=true`，强制生成满 1K tokens，避免 EOS 截断影响 TPOT。
-- 并发：`asyncio.gather` 同时发出 4 个流式请求（batch size=4）。
-- 计时（客户端流式统计）：
-  - **TTFT** = 收到第一个 token 的时刻 − 请求发出时刻
-  - **TPOT** = (最后一个 token 时刻 − 第一个 token 时刻) / (输出 token 数 − 1)
-- 运行前先用小请求预热（仅生成 8 token），排除 CUDA graph / cache 冷启动影响。
-
-### 基准结果（Qwen3-30B-A3B-FP8，8K in / 1K out / batch 4，CUDA Graph 模式）
-
-| 指标 | 结果 |
+| 阶段 | top kernel（耗时/占比） |
 |---|---|
-| TTFT 平均 | **1515 ms**（4 请求：1510.8 ~ 1516.7 ms） |
-| TPOT 平均 | **29.15 ms**（≈34.3 tok/s 每请求） |
-| 每请求吞吐 | 32.7 tok/s |
-| batch 总耗时 | 31.35 s |
+| prefill | `fused_moe_kernel` 579ms(40%)、`flash_fwd_splitkv` 411ms(28%)、`cutlass_3x_gemm_fp8_blockwise` 105ms(7%) |
+| decode | `fused_moe_kernel` 3941ms(37%)、`flash_fwd_splitkv` 2310ms(22%)、elementwise copy 1275ms(12%)、`cutlass_3x_gemm_fp8_blockwise` 1163ms(11%) |
 
-eager 模式（`--enforce-eager`）下 TTFT ≈ 2156 ms、TPOT ≈ 34.15 ms；graph+no-compile 模式
-（`--compilation-config '{"mode": "NONE", "cudagraph_mode": "FULL_DECODE_ONLY"}'`）下
-TTFT ≈ 2313 ms、TPOT ≈ 34.25 ms。
+**NVFP4**（MoE 从 `fused_moe_kernel` 切换为 TRT-LLM/CUTLASS FP4 分组 GEMM）：
 
-四种模式对比（8K in / 1K out / batch 4，TTFT / TPOT）：
-
-| 模式 | FP8 | NVFP4 | 说明 |
-|---|---|---|---|
-| graph + compile（默认） | 1515 / 29.15 ms | **1223 / 19.47 ms** | 正式报数 |
-| graph + no-compile | 2313 / 34.25 ms | 1196 / 26.76 ms | `mode=NONE` + `FULL_DECODE_ONLY` |
-| eager | ~2156 / ~34.15 ms | —（trace 见 4.5 节 decode 30.8ms/步） | profiling 会话 |
-
-FP8 结果文件：`bench_result.json` / `bench_result_graph_nocompile.json`；
-NVFP4：`bench_result_nvfp4.json` / `bench_result_nvfp4_graph_nocompile.json`。
-
-结论：
-- **FP8**：性能收益几乎全部来自 torch.compile 融合（TPOT -15%、TTFT -35%），
-  CUDA Graph 单独启用对 decode 几乎无增益。
-- **NVFP4**：compile 依然显著（TPOT 26.76→19.47 ms，-27%）；graph 单独启用
-  相比 eager decode（~30.8ms/步）有 ~4ms 收益（消除 launch 开销）。
-
-### NVFP4 对比结果（同参数：8K in / 1K out / batch 4，graph+compile）
-
-启动：同上命令换 `--model /models/Qwen3-30B-A3B-NVFP4`（vLLM 自动识别 ModelOpt NVFP4，
-`quantization=modelopt_fp4`、KV cache `fp8_e4m3`、GEMM 走 `FlashInferCutlassNvFp4LinearKernel`）。
-
-| 指标 | FP8 | NVFP4 | 提升 |
-|---|---|---|---|
-| TTFT 平均 | 1515 ms | **1223 ms** | -19% |
-| TPOT 平均 | 29.15 ms | **19.47 ms** | -33% |
-| 每请求吞吐 | 32.7 tok/s | 48.4 tok/s | +48% |
-| batch 总耗时 | 31.35 s | 21.15 s | |
-
-结果文件：`bench_result_nvfp4.json`；profiling 见第 4.5 节。
-
-### 其他获取 TTFT/TPOT 的途径
-
-```bash
-# 1. vLLM 官方基准（服务端统计，含分位数）
-docker exec <容器> vllm bench serve --backend openai \
-  --host localhost --port 8000 --model qwen3-30b-a3b \
-  --dataset-name random --random-input-len 8192 --random-output-len 1024 \
-  --num-prompts 4 --request-rate inf --percentile-metrics ttft,tpot,itl
-
-# 2. Prometheus 指标（服务端直方图，持续累积）
-curl localhost:8000/metrics | grep -E 'time_to_first_token|time_per_output_token'
-```
-
-## 4. Prefill / Decode Profiling
-
-### 4.1 重要结论（2026-09-01 修正）：kernel 采集失败是 nsys 版本回归，2025.3.2 可用
-
-早期结论“nsys 在 GB10 上无法采集 kernel，属平台限制”**已被推翻**。v3~v5 三轮对照
-实验确认 **nsys 版本是决定性变量**：
-
-| nsys 版本 | 环境 | kernel 结果 |
-|---|---|---|
-| **2025.3.2**（bind-mount 宿主机 `/opt/nvidia/nsight-systems/2025.3.2` 进容器） | vllm-nsys:fp8 容器内 | ✅ **177,561 条**，覆盖全程 229s |
-| 2025.6.3（镜像自带） | 同容器 | ❌ 0~417 条（仅启动期），静默无报错 |
-| 2026.1.3 | 宿主机 | ❌ 0 条 |
-
-- 早期对 2025.3.2 的失败测试疑与 `--capture-range=cudaProfilerApi` 窗口模式有关：
-  v3 实测该模式下 RUNTIME/NVTX/memcpy 均正常但 **KERNEL 表缺失**（任何版本、容器内也
-  一样）；全程立即采集则 kernel 完整（v5 实测）。
-- 2025.6.x+ 存在 kernel 采集回归，2025.3.2 是当前唯一验证可用版本。
-- 结论：**容器内 + nsys 2025.3.2 + 全程采集**即可获得完整 kernel 数据，逐 kernel
-  归因不再强依赖 torch profiler（后者仍是算子级/注解级分析的补充）。
-
-### 4.2 方案：torch profiler + sitecustomize 自动打点
-
-该 vLLM 构建没有 HTTP profiler 端点（`/start_profile` 404），因此通过
-`PYTHONPATH` 注入 `prof_patch/sitecustomize.py`，monkey-patch Worker 的 `execute_model`：
-
-- 第 1 次 `execute_model`：自动启动 torch profiler（覆盖 prefill 起点）
-- 第 N 次（环境变量 `VLLM_PROF_STOP_AT_STEP`，默认 280）：停止并导出 chrome trace
-
-关键启动参数：
-
-```
---enforce-eager                                          # CUDA Graph 内的 kernel 无法逐条记录，必须 eager
---profiler-config.profiler=torch
---profiler-config.torch_profiler_dir=/models/prof_traces # trace 输出目录
---profiler-config.torch_profiler_with_stack=false        # 关闭调用栈（内存大户，防 OOM）
--e VLLM_PROF_STOP_AT_STEP=280                            # 采集窗口（步数）
-```
-
-**采集窗口注意事项**：步数是全局计数的。基准脚本预热请求也占 step，若预热生成 1024 token
-就会消耗 1024 步窗口导致真正测试没被采到。因此预热只生成 8 token；窗口 280 步 ≈
-prefill(4~8 chunk) + ~270 decode step。
-
-### 4.3 采集结果分析
-
-分析脚本：`python3 analyze_trace.py [trace文件]`
-（按 `user_annotation` 步骤时长 >200ms 判定 prefill chunk，其余为 decode step）
-
-**PREFILL**（4 个 chunk 共 2.17s ≈ TTFT 2272ms，GPU busy 66%）：
-
-| kernel | 耗时 | 占比 |
-|---|---|---|
-| `fused_moe_kernel`（MoE 专家计算） | 579 ms | 40% |
-| `flash_fwd_splitkv_kernel`（注意力） | 411 ms | 28% |
-| `cutlass_3x_gemm_fp8_blockwise`（FP8 GEMM） | 105 ms | 7% |
-
-**DECODE**（274 步，平均 33.8 ms/步，GPU busy 91%）：
-
-| kernel | 耗时 | 占比 |
-|---|---|---|
-| `fused_moe_kernel` | 3941 ms | 37% |
-| `flash_fwd_splitkv_kernel`（注意力） | 2310 ms | 22% |
-| elementwise copy（eager 开销） | 1275 ms | 12% |
-| `cutlass_3x_gemm_fp8_blockwise` | 1163 ms | 11% |
-
-**洞察**：两阶段均由 MoE + 注意力主导；decode 阶段 12% 花在 elementwise copy 上，这是
-eager 模式代价，CUDA Graph 模式下可基本消除（对应 TPOT 34.15 → 29.15 ms）。
-
-**Profiler 对性能的影响**：采集期间 decode step 约 187 ms（含导出阻塞）；TTFT 在窗口内
-测得 2272 ms，仅作 profiling 参考，**性能数字以无 profiler 的干净跑分为准**（第 3 节）。
-
-### 4.4 查看 trace
-
-trace 文件体积大（83~121MB），不进 git 仓库，统一从 GitHub Release 下载：
-
-- Release 页面：<https://github.com/OuYangxin12/vllm-profiling/releases/tag/artifacts>
-- FP8 trace：<https://github.com/OuYangxin12/vllm-profiling/releases/download/artifacts/qwen3_fp8_dp0_pp0_tp0_dcp0_ep0_rank0.1788165308338834706.pt.trace.json.gz>
-- NVFP4 trace：<https://github.com/OuYangxin12/vllm-profiling/releases/download/artifacts/qwen3_fp4_dp0_pp0_tp0_dcp0_ep0_rank0.1788168168135033208.pt.trace.json.gz>
-- NVFP4 kernel 汇总：<https://github.com/OuYangxin12/vllm-profiling/releases/download/artifacts/qwen3_fp4_kernel_summary.txt>
-
-```bash
-# 方式一：Chrome 浏览器打开 chrome://tracing，加载 *.pt.trace.json.gz
-# 方式二：Perfetto UI（https://ui.perfetto.dev）拖入文件
-# 方式三：命令行汇总
-python3 analyze_trace.py prof_traces/qwen3_fp8_*.pt.trace.json.gz
-```
-
-后续新增 trace 上传：`gh release upload artifacts <新trace文件> --clobber`
-
-### 4.5 NVFP4 profiling 结果
-
-采集方式与 4.2 完全一致（`VLLM_PROF_PREFIX=qwen3_fp4`、窗口 280 步），
-trace：`prof_traces/qwen3_fp4_*.pt.trace.json.gz`，汇总：`prof_traces/qwen3_fp4_kernel_summary.txt`。
-
-**PREFILL**（4 chunks，GPU busy 99%）：
-
-| kernel | 耗时 | 说明 |
-|---|---|---|
-| `flashinfer::BatchPrefillWithPagedKVCacheKernel` | 389 ms | 注意力 |
-| `cutlass GemmUniversal GroupProblemShape` ×2 | 326 ms | FP4 分组 GEMM（MoE 专家） |
-| `tensorrt_llm doActivationKernel`（fp4→bf16） | 46 ms | MoE 激活 |
-| `tensorrt_llm expandInputRowsKernel` | 29 ms | MoE token 重排 |
-
-**DECODE**（274 步，平均 30.8 ms/步，GPU busy 85%）：
-
-| kernel | 耗时 | 占比 |
-|---|---|---|
-| `cutlass` FP4 分组 GEMM（MoE） | 1906 ms | 23% |
-| elementwise copy（eager 开销） | 1338 ms | 16% |
-| `cutlass` 分组 GEMM（另一分支） | 985 ms | 12% |
-| `flashinfer::BatchPrefill`（注意力） | 873 ms | 11% |
-| `cutlass_80_wmma bf16 GEMM` | 692 ms | 8% |
-| `cvt_fp16_to_fp4`（量化转换） | 99 ms | 1% |
-
-对比 FP8：MoE 从 `fused_moe_kernel`（vLLM 自研）切换到 TRT-LLM/CUTLASS FP4 分组 GEMM，
-FP4 带来的带宽收益使 eager decode 从 33.8 降到 30.8 ms/步；elementwise copy 占比
-依旧最高（16%），compile 融合后预计收益更大（对应干净跑分 TPOT 19.47 ms）。
-
-### 4.6 graph+no-compile 模式的 profiling（FP8 / NVFP4）
-
-配置：第 3 节 graph+no-compile 同款 `mode=NONE` + `FULL_DECODE_ONLY`，叠加 torch profiler（0.70 显存、关 stack、窗口 280 步），
-前缀 `qwen3_fp8_nc` / `qwen3_fp4_nc`。
-
-**重要发现**：FULL_DECODE_ONLY 图内的 decode kernel 也被 kineto（CUPTI graph trace）
-完整逐条记录，并非只有回放事件，kernel 级归因仍然可用。但该模式下
-`execute_context_N` 注释的时间片不再可靠，每步耗时请用 **GPU busy 总量 / 步数**：
-NVFP4 ≈ 27.8 ms/步（7.63s/274，GPU busy 99%）、FP8 ≈ 40.1 ms/步（10.99s/274，94%），
-与各自干净跑分 TPOT（26.76 / 34.25 ms）基本吻合。
-
-**FP8**（`prof_traces/qwen3_fp8_nc_kernel_summary.txt`）：
-
-| 阶段 | 主要 kernel（与 eager 模式同构） |
+| 阶段 | top kernel |
 |---|---|
-| prefill | `fused_moe_kernel` 611ms、`flash_fwd_splitkv` 405ms、`cutlass_3x_gemm_fp8_blockwise` 107ms |
-| decode | `fused_moe_kernel` 4268ms(39%)、`flash_fwd_splitkv` 1933ms(18%)、elementwise copy 1355ms(12%)、`cutlass_3x_gemm_fp8_blockwise` 1161ms(11%) |
+| prefill | `flashinfer::BatchPrefillWithPagedKVCacheKernel` 389ms、CUTLASS FP4 分组 GEMM ×2 326ms、`doActivationKernel`(fp4→bf16) 46ms |
+| decode | CUTLASS FP4 分组 GEMM 1906ms(23%)、elementwise copy 1338ms(16%)、`flashinfer::BatchPrefill` 873ms(11%)、bf16 wmma GEMM 692ms(8%) |
 
-**NVFP4**（`prof_traces/qwen3_fp4_nc_kernel_summary.txt`）：
+**洞察**：两阶段均由 MoE + 注意力主导；eager 模式 decode 有 12~16% 花在
+elementwise copy 上，compile 融合后基本消除（对应 TPOT 34.15 → 29.15 / 30.8 → 19.47）。
 
-| 阶段 | 主要 kernel |
-|---|---|
-| prefill | `flashinfer::BatchPrefill` 391ms、CUTLASS FP4 分组 GEMM 323ms、`doActivationKernel` 47ms |
-| decode | CUTLASS FP4 分组 GEMM 1511+783+911ms、elementwise copy 1356ms、`flashinfer::BatchPrefill` 842+399ms |
-
-与 eager 模式（4.3/4.5 节）对比：kernel 构成基本一致，说明 FULL_DECODE_ONLY 图
-只是消除 CPU launch 开销，GPU 侧计算图未变；收益主要来自 GPU busy 率提升
-（NVFP4 decode 85%→99%）。profiling 会话中的客户端 TPOT（FP8 59ms / NVFP4 51ms）
-含 profiler 开销与导出阻塞，不作性能参考。
-
-### 4.7 nsys 原生报告（kernel + GPU metrics 时间线）
-
-**GPU metrics（SM 吞吐/显存带宽曲线）**与 **kernel 逐条记录**（正确版本 + 全程采集）
-均可采集。推荐方案（v5，已验证，即 `run_verify_nsys.sh`）：
-
-```bash
-docker run -d --name vllm-fp8-nsys-v3 --privileged --gpus all --ipc=host \
-  --network host --ulimit memlock=-1 --ulimit stack=67108864 \
-  -v $(pwd):/work -v $(pwd)/models:/models \
-  -v /opt/nvidia/nsight-systems/2025.3.2:/opt/nvidia/nsight-systems/2025.3.2:ro \
-  -e PYTHONPATH=/work/prof_patch -e VLLM_NVTX_LABEL=1 \
-  --entrypoint "" vllm-nsys:fp8 \
-  /opt/nvidia/nsight-systems/2025.3.2/bin/nsys profile \
-    -o /work/nsys_reports/qwen3_fp8_v5 --force-overwrite=true \
-    -t cuda,nvtx,osrt --sample=none --cpuctxsw=none \
-    --cuda-graph-trace=node \
-  python3 -m vllm.entrypoints.openai.api_server \
-    --model /models/Qwen3-30B-A3B-FP8 --served-model-name qwen3-30b-a3b \
-    --tensor-parallel-size 1 --max-model-len 16384 \
-    --gpu-memory-utilization 0.85 --trust-remote-code --host 0.0.0.0 --port 8000
-# 就绪后（health 200）：docker exec vllm-fp8-nsys-v3 python3 /work/verify_bench.py
-# 收尾：docker stop -t 180 vllm-fp8-nsys-v3
-```
-
-要点：
-- **必须 bind-mount 2025.3.2 并显式调用**，镜像自带的 2025.6.3 采不到 kernel（4.1 节）；
-- **不要用 `--capture-range=cudaProfilerApi` 窗口模式**（KERNEL 表缺失），改全程采集，
-  prefill/decode 切分靠 NVTX 标签后处理；
-- `--cuda-graph-trace=node` 把 decode CUDA Graph 展开为逐 kernel 记录；
-- NVTX 标签（`prefill_stepN_tokensN` / `decode_stepN_tokensN`）由 prof_patch 补丁产生；
-  导出 sqlite 后文本**内联在 `NVTX_EVENTS.text` 列**（不经 StringIds join）；
-- decode 走 CUDA Graph 时 NVTX 区间时长只含 CPU launch（~7ms），**步耗时用相邻区间
-  start 差值**（实测平均 30.39ms，与客户端 TPOT 29.78ms 吻合）；
-- **收尾必须 `docker stop -t 180`**：默认 10s 超时 SIGKILL 会丢失报告（v4 教训）。
-
-产物：`nsys_reports/qwen3_fp8_v5.nsys-rep`（32MB）：**177,561 条 kernel** 覆盖 229s 全程
-（Top：`fused_moe_kernel` 3088ms、`cutlass_3x_gemm_fp8_blockwise`、`flash_fwd_splitkv`、
-`act_and_mul`），NVTX prefill ×4（共 966ms）/ decode ×140。验证负载
-`verify_bench.py`（warmup 64/8 + batch4 8K入/128出）TTFT 1509ms / TPOT 29.78ms，
-与无 profiler 干净跑分（1515/29.15ms）一致，profiling 开销可忽略。
-
-NVFP4 同方案产物：`nsys_reports/qwen3_fp4_v5.nsys-rep`（53MB，**314,796 条 kernel**），
-MoE 已切换为 TRT-LLM/CUTLASS FP4 分组 GEMM（约 35% GPU 时间）+ `flashinfer::BatchPrefill`；
-基准 TTFT 1227.5ms / TPOT 19.74ms（干净基线 1223/19.47），稳态 decode 步周期
-median 19.72ms ≈ TPOT。两版 summary：`qwen3_fp{8,4}_v5_stats.txt`（`nsys stats` 输出）。
-
-早期缺 kernel 的报告（2025.6.3 所采的 `qwen3_fp8/fp4.nsys-rep` 全程报告与
-`qwen3_fp{8,4}_{prefill,decode}.nsys-rep` 分窗口报告）已删除；如需 GPU metrics
-曲线，采集时加 `--gpu-metrics-devices=all`（需 `--privileged`，且同一 GPU 上
-不能与其他 nsys GPU-metrics 会话并发）。
-
-#### CUPTI 尾部丢失问题与窗口模式修正（2026-09-01 v6 实验）
-
-- **全程采集存在 CUPTI 尾部丢事件**：`--cuda-flush-interval=1000` 可把丢失从
-  ~1.9s（67 步）减到 ~0.8s（27 步），但无法归零（丢失锚定在最后一段 CUPTI 活动，
-  与停止时机无关，负载后空闲 10s 也无效）。判别方法：NVTX（CPU 侧注入）仍在推进
-  而 KERNEL/RUNTIME/MEMCPY 同时归零 → CUPTI 停采，非 GPU 空闲。
-- **窗口模式结论修正**：早期“capture-range=cudaProfilerApi 模式 KERNEL 表缺失”
-  实为 v3 时代 2025.6.3 版本回归的混淆；**2025.3.2 + 窗口模式完全可用**，且
-  cudaProfilerStop 触发 buffer 强制 flush，**彻底解决尾部丢失**。
-- **v6 窗口模式产物**（`VLLM_CUDA_PROFILER_START_AT_STEP=9 STOP_AT_STEP=145
-  bash run_verify_nsys.sh fp8` 配合 `V5_OUT=qwen3_fp8_v6`）：
-  `nsys_reports/qwen3_fp8_v6.nsys-rep`（11MB，140,947 条 kernel，仅覆盖 warmup 尾部
-  + 基准段）：decode **129 步全部完整**（1,072 kernel/步，busy/步 median 29.68ms
-  ≈ 步周期 29.80ms ≈ 99.6% GPU busy），prefill 4 chunks 齐全，唯一空步为 stop 后
-  shutdown 伪步（tokens0）。**逐 kernel 归因优先用 v6**；v5 全程报告保留
-  加载/Graph 捕获期全时间线（尾部 ~0.8s 负载段缺失，归因只用到 step116）。
-
-#### nc 窗口报告：对齐 graph+no-compile 基准（2026-09-01）
-
-- **对齐目标**：`bench_result_graph_nocompile.json` / `bench_result_nvfp4_graph_nocompile.json`
-  的参数（8K in / **1K out** / batch 4，`mode=NONE` + `FULL_DECODE_ONLY`），
-  脚本新增 `fp8nc`/`fp4nc` 变体，bench 用 `BENCH_OUTPUT_LEN=1024`。
-- **STOP 陷阱（重要教训）**：窗口 STOP 设 1060（> 实际最后 execute_model 步 1039），
-  bench 结束后引擎空闲不再调 execute_model，步计数器停在 1039，`cudaProfilerStop`
-  **永远不触发**（sqlite RUNTIME 表 0 次 cuProfilerStop），报告由 docker stop 收尾
-  → 尾部又丢 26 步（~1.0s），窗口模式同款丢失。修复：补丁 stop 判断 `==` 改 `>=`，
-  且 STOP 必须设在**必然在负载内触发**的步数（本次 1037 = 8 warmup + 5 prefill
-  + ~1024 decode 尾段）。
-- **修复后产物（零空步）**：`qwen3_fp8_v6_nc.nsys-rep`（43MB，1,171,187 条 kernel，
-  decode 1023 步全量，busy 37.78ms ≈ 周期 37.79ms ≈ 99.9% GPU busy）；
-  `qwen3_fp4_v6_nc.nsys-rep`（46MB，1,251,219 条 kernel，busy 27.41ms ≈ 周期
-  27.45ms ≈ 99.9%）。bench 复测 TTFT：FP8 2268/2285ms（干净 2313 ✓）、
-  FP4 1276/1285ms（干净 1196，+7% 为追踪开销）。
-- **nc 模式 kernel 特征**：`direct_copy` elementwise 拷贝占 13.5%（FP8）/17.8%（FP4），
-  而 compile 模式下几乎消失——torch.compile 融合收益的直接证据；
-  decode busy 对比：FP8 nc 37.78ms vs compile 29.68ms（+27%）、
-  FP4 nc 27.41ms vs compile 19.74ms（+39%）。
-- **客户端 TPOT 伪影**：stop 在 bench 尾段触发后 nsys 立即 finalization（处理
-  ~120 万事件），CPU 被占导致 SSE token 流尾部延迟 → 该轮 client TPOT 虚高
-  （47.52/37.01ms），引用首轮未触发 stop 的复测值（FP8 37.63ms / FP4 27.73ms）
-  或干净基线；服务端步周期（37.79/27.45ms）全程稳定不受影响。
+profiling 会话中的客户端 TPOT（含 profiler 开销与导出阻塞，如 eager FP8 ~187ms/步）
+不作性能参考，性能数字一律以第 2 节干净跑分为准。
 
 ## 5. OOM 防范规范（GB10 统一内存必读）
 
@@ -381,34 +239,25 @@ median 19.72ms ≈ TPOT。两版 summary：`qwen3_fp{8,4}_v5_stats.txt`（`nsys 
 | 预热请求最小化 | 预热 max_tokens=8，避免占用窗口和内存 |
 | 过程监控 | 采集期间 `free -h`，available 低于 8GB 立即停止 |
 
-KV cache 需求估算（FP8 KV）：batch 4 × (8K+1K) ≈ 36K tokens，在 0.70 配置下远小于容量，
-如需更大并发/上下文可适当上调 utilization，但建议不超过 0.80。
+KV cache 需求估算（FP8 KV）：batch 4 × (8K+1K) ≈ 36K tokens，在 0.70 配置下远小于
+容量；如需更大并发/上下文可适当上调 utilization，但建议不超过 0.80。
 
 ## 6. 文件清单
 
 | 文件 | 说明 |
 |---|---|
-| `start_vllm.sh` | 常规 vLLM 服务启动脚本（CUDA Graph 模式） |
+| `start_vllm.sh` | 常规 vLLM 服务启动脚本（CUDA Graph + compile 模式） |
 | `bench_ttft_tpot.py` | TTFT/TPOT 基准脚本（8K in / 1K out / batch 4） |
-| `bench_result.json` | FP8 干净基准结果（graph+compile） |
-| `bench_result_graph_nocompile.json` | FP8 graph+no-compile 基准结果 |
-| `bench_result_nvfp4.json` | NVFP4 干净基准结果（graph+compile） |
-| `bench_result_nvfp4_graph_nocompile.json` | NVFP4 graph+no-compile 基准结果 |
-| `prof_patch/sitecustomize.py` | torch profiler 自动打点 + nsys cudaProfilerApi + NVTX 阶段标注补丁（PYTHONPATH 注入） |
-| `run_verify_nsys.sh` | nsys 采集方案启动脚本（用法 `bash run_verify_nsys.sh [fp8\|fp4\|fp8nc\|fp4nc]`，nc 变体对齐 graph+no-compile 基准，见 4.7 节） |
-| `verify_bench.py` | nsys 验证负载客户端（warmup + batch4 8K入；`BENCH_OUTPUT_LEN` 环境变量控制输出长度，默认 128） |
-| `bench_result_fp8_nc_profile.json` | FP8 nc 采集轮 bench 复测（1K out） |
-| `bench_result_fp4_nc_profile.json` | NVFP4 nc 采集轮 bench 复测（1K out） |
-| `nsys_reports/qwen3_fp8_v5.nsys-rep` | 已验证的 kernel+NVTX 全程报告 FP8（177,561 条 kernel，见 4.7 节） |
-| `nsys_reports/qwen3_fp4_v5.nsys-rep` | 已验证的 kernel+NVTX 全程报告 NVFP4（314,796 条 kernel，见 4.7 节） |
-| `nsys_reports/qwen3_fp{8,4}_v5_stats.txt` | `nsys stats` 导出的 summary（nvtx/cuda_api/kernel/memops） |
-| `nsys_reports/qwen3_fp8_v6_nc.nsys-rep` | FP8 graph+no-compile 窗口报告（1K out 全量，1,171,187 条 kernel，零空步） |
-| `nsys_reports/qwen3_fp4_v6_nc.nsys-rep` | NVFP4 graph+no-compile 窗口报告（1K out 全量，1,251,219 条 kernel，零空步） |
-| `nsys_reports/qwen3_fp{8,4}_v6_nc_stats.txt` | nc 报告的 `nsys stats` summary |
-| `prof_traces/*.pt.trace.json.gz` | chrome trace（FP8 / NVFP4 的 prefill+decode kernel 级数据，不入库，见 4.4 节 Release 下载链接） |
-| `prof_traces/qwen3_fp4_kernel_summary.txt` | NVFP4 eager trace kernel 汇总 |
-| `prof_traces/qwen3_fp8_nc_kernel_summary.txt` | FP8 graph+no-compile trace kernel 汇总 |
-| `prof_traces/qwen3_fp4_nc_kernel_summary.txt` | NVFP4 graph+no-compile trace kernel 汇总 |
-| `analyze_trace.py` | trace 分析脚本（prefill/decode kernel 汇总） |
+| `bench_result.json` / `bench_result_graph_nocompile.json` | FP8 干净基准结果（compile / no-compile） |
+| `bench_result_nvfp4.json` / `bench_result_nvfp4_graph_nocompile.json` | NVFP4 干净基准结果 |
+| `bench_result_fp{8,4}_nc_profile.json` | nc 窗口采集轮的 bench 复测（TPOT 含流式尾部伪影，见 TROUBLESHOOTING） |
+| `run_verify_nsys.sh` | nsys 采集脚本（`bash run_verify_nsys.sh [fp8\|fp4\|fp8nc\|fp4nc]`，见第 3 节） |
+| `verify_bench.py` | 采集验证负载客户端（warmup + batch4 8K 入；`BENCH_OUTPUT_LEN` 控制输出长度） |
+| `prof_patch/sitecustomize.py` | torch profiler 打点 + nsys cudaProfilerApi 窗口控制 + NVTX 阶段标注补丁 |
+| `analyze_trace.py` | torch profiler trace 分析脚本（prefill/decode kernel 汇总） |
+| `nsys_reports/*.nsys-rep` / `*_stats.txt` | nsys 报告与 summary（明细见 `nsys_reports/README.md`） |
+| `prof_traces/*.pt.trace.json.gz` | chrome trace（不入库，GitHub Release 下载，见 4.1 节） |
+| `prof_traces/*_kernel_summary.txt` | trace kernel 汇总（eager FP8/NVFP4 与 nc FP8/NVFP4） |
+| `TROUBLESHOOTING.md` | 采集过程中的问题与修正记录（版本回归、尾部丢失、STOP 陷阱等） |
 | `download_model.sh` | ModelScope 模型下载脚本 |
 | `task.txt` | 测试任务清单 |
